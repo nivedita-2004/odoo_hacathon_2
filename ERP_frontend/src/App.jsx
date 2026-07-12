@@ -1,9 +1,5 @@
-import React from 'react'
+import AppRoutes from './routes/AppRoutes'
 
 export default function App() {
-  return (
-    <div>
-      <h1>Hello, World!</h1>
-    </div>
-  )
+  return <AppRoutes />
 }

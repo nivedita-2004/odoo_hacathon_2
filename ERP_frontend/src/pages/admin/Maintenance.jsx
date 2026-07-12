@@ -1,0 +1,795 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Camera,
+  Check,
+  Clock3,
+  Eye,
+  Plus,
+  Search,
+  UserCog,
+  Wrench,
+  X,
+} from "lucide-react";
+
+const fallbackAssets = [
+  {
+    tag: "AF-0001",
+    name: "Dell Latitude 5440",
+    status: "Allocated",
+    maintenanceHistory: [],
+  },
+  {
+    tag: "AF-0002",
+    name: "Epson EB-X49 Projector",
+    status: "Available",
+    maintenanceHistory: [],
+  },
+  {
+    tag: "AF-0003",
+    name: "Honda City",
+    status: "Reserved",
+    maintenanceHistory: [],
+  },
+  {
+    tag: "AF-0004",
+    name: "HP EliteBook 840",
+    status: "Under Maintenance",
+    maintenanceHistory: [],
+  },
+];
+const initialRequests = [
+  {
+    id: "MR-0102",
+    assetTag: "AF-0004",
+    assetName: "HP EliteBook 840",
+    issue:
+      "Battery drains within 30 minutes and device shuts down unexpectedly.",
+    priority: "High",
+    photo: "battery-issue.jpg",
+    raisedBy: "Neha Kapoor",
+    raisedOn: "10 Jul 2026",
+    status: "In Progress",
+    technician: "Vikram Singh",
+    resolution: "",
+    history: [
+      {
+        event: "Request raised",
+        date: "10 Jul 2026",
+        detail: "Priority: High",
+      },
+      {
+        event: "Approved by Asset Manager",
+        date: "10 Jul 2026",
+        detail: "Asset moved to Under Maintenance",
+      },
+      {
+        event: "Technician assigned",
+        date: "11 Jul 2026",
+        detail: "Vikram Singh",
+      },
+      {
+        event: "Work started",
+        date: "11 Jul 2026",
+        detail: "Battery diagnostics underway",
+      },
+    ],
+  },
+  {
+    id: "MR-0103",
+    assetTag: "AF-0002",
+    assetName: "Epson EB-X49 Projector",
+    issue: "Image flickers after approximately twenty minutes of use.",
+    priority: "Medium",
+    photo: "",
+    raisedBy: "Aman Gupta",
+    raisedOn: "12 Jul 2026",
+    status: "Pending",
+    technician: "",
+    resolution: "",
+    history: [
+      {
+        event: "Request raised",
+        date: "12 Jul 2026",
+        detail: "Priority: Medium",
+      },
+    ],
+  },
+  {
+    id: "MR-0098",
+    assetTag: "AF-0001",
+    assetName: "Dell Latitude 5440",
+    issue: "Keyboard replacement required.",
+    priority: "Low",
+    photo: "keyboard.jpg",
+    raisedBy: "Priya Sharma",
+    raisedOn: "02 Jul 2026",
+    status: "Resolved",
+    technician: "Sanjay Kumar",
+    resolution: "Keyboard replaced and device tested successfully.",
+    history: [
+      { event: "Request raised", date: "02 Jul 2026", detail: "Priority: Low" },
+      {
+        event: "Approved by Asset Manager",
+        date: "02 Jul 2026",
+        detail: "Asset moved to Under Maintenance",
+      },
+      {
+        event: "Technician assigned",
+        date: "03 Jul 2026",
+        detail: "Sanjay Kumar",
+      },
+      {
+        event: "Resolved",
+        date: "05 Jul 2026",
+        detail: "Keyboard replaced and tested",
+      },
+    ],
+  },
+];
+const technicians = [
+  "Vikram Singh",
+  "Sanjay Kumar",
+  "Meera Joshi",
+  "Rohit Das",
+];
+const statuses = [
+  "All",
+  "Pending",
+  "Approved",
+  "Rejected",
+  "Technician Assigned",
+  "In Progress",
+  "Resolved",
+];
+const today = new Date().toLocaleDateString("en-IN", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+const read = (key, fallback) => {
+  try {
+    return JSON.parse(localStorage.getItem(key)) || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+export default function Maintenance() {
+  const [assets, setAssets] = useState(() =>
+    read("assetflow_assets", fallbackAssets),
+  );
+  const [requests, setRequests] = useState(() =>
+    read("assetflow_maintenance_requests", initialRequests),
+  );
+  const [filter, setFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const [raiseForm, setRaiseForm] = useState(null);
+  const [assigning, setAssigning] = useState(null);
+  const [resolving, setResolving] = useState(null);
+  const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "assetflow_maintenance_requests",
+      JSON.stringify(requests),
+    );
+  }, [requests]);
+  useEffect(() => {
+    localStorage.setItem("assetflow_assets", JSON.stringify(assets));
+  }, [assets]);
+
+  const visible = useMemo(
+    () =>
+      requests.filter(
+        (item) =>
+          (filter === "All" || item.status === filter) &&
+          [
+            item.id,
+            item.assetTag,
+            item.assetName,
+            item.issue,
+            item.raisedBy,
+            item.technician,
+          ].some((value) => value.toLowerCase().includes(search.toLowerCase())),
+      ),
+    [requests, filter, search],
+  );
+  const updateAsset = (assetTag, status, event, detail) =>
+    setAssets(
+      assets.map((asset) =>
+        asset.tag === assetTag
+          ? {
+              ...asset,
+              status,
+              maintenanceHistory: [
+                ...(asset.maintenanceHistory || []),
+                { event, date: today, detail },
+              ],
+            }
+          : asset,
+      ),
+    );
+  const addHistory = (id, status, event, detail, extra = {}) =>
+    setRequests(
+      requests.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status,
+              ...extra,
+              history: [...item.history, { event, date: today, detail }],
+            }
+          : item,
+      ),
+    );
+
+  const raise = (event) => {
+    event.preventDefault();
+    const asset = assets.find((item) => item.tag === raiseForm.assetTag);
+    const item = {
+      id: `MR-${String(104 + requests.length).padStart(4, "0")}`,
+      assetTag: asset.tag,
+      assetName: asset.name,
+      issue: raiseForm.issue,
+      priority: raiseForm.priority,
+      photo: raiseForm.photo,
+      raisedBy: raiseForm.raisedBy,
+      raisedOn: today,
+      status: "Pending",
+      technician: "",
+      resolution: "",
+      history: [
+        {
+          event: "Request raised",
+          date: today,
+          detail: `Priority: ${raiseForm.priority}`,
+        },
+      ],
+    };
+    setRequests([item, ...requests]);
+    setRaiseForm(null);
+  };
+  const approve = (item) => {
+    addHistory(
+      item.id,
+      "Approved",
+      "Approved by Asset Manager",
+      "Asset moved to Under Maintenance",
+    );
+    updateAsset(
+      item.assetTag,
+      "Under Maintenance",
+      "Maintenance approved",
+      `${item.id}: ${item.issue}`,
+    );
+  };
+  const reject = (item) =>
+    addHistory(
+      item.id,
+      "Rejected",
+      "Rejected by Asset Manager",
+      "Request closed without maintenance",
+    );
+  const assign = (event) => {
+    event.preventDefault();
+    addHistory(
+      assigning.id,
+      "Technician Assigned",
+      "Technician assigned",
+      assigning.technician,
+      { technician: assigning.technician },
+    );
+    setAssigning(null);
+  };
+  const startWork = (item) =>
+    addHistory(
+      item.id,
+      "In Progress",
+      "Work started",
+      `${item.technician} started maintenance work`,
+    );
+  const resolve = (event) => {
+    event.preventDefault();
+    addHistory(
+      resolving.id,
+      "Resolved",
+      "Request resolved",
+      resolving.resolution,
+      { resolution: resolving.resolution },
+    );
+    updateAsset(
+      resolving.assetTag,
+      "Available",
+      "Maintenance resolved",
+      resolving.resolution,
+    );
+    setResolving(null);
+  };
+
+  return (
+    <div className="mx-auto max-w-[1600px] space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-[#7a6475]">Repair workflow</p>
+          <h1 className="mt-1 text-2xl font-bold text-[#31232e]">
+            Maintenance Management
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Route asset repairs through approval, technician assignment and
+            resolution.
+          </p>
+        </div>
+        <button
+          className="inline-flex items-center gap-2 rounded-lg bg-[#4f3448] px-4 py-2.5 text-sm font-medium text-white"
+          onClick={() =>
+            setRaiseForm({
+              assetTag: "",
+              issue: "",
+              priority: "Medium",
+              photo: "",
+              raisedBy: "",
+            })
+          }
+        >
+          <Plus size={18} />
+          Raise Request
+        </button>
+      </div>
+      <div className="grid grid-cols-5 gap-4">
+        {[
+          [
+            "Pending",
+            requests.filter((item) => item.status === "Pending").length,
+            Clock3,
+          ],
+          [
+            "Approved",
+            requests.filter((item) => item.status === "Approved").length,
+            Check,
+          ],
+          [
+            "Assigned / In Progress",
+            requests.filter((item) =>
+              ["Technician Assigned", "In Progress"].includes(item.status),
+            ).length,
+            UserCog,
+          ],
+          [
+            "Resolved",
+            requests.filter((item) => item.status === "Resolved").length,
+            Wrench,
+          ],
+          [
+            "Critical / High",
+            requests.filter(
+              (item) =>
+                ["Critical", "High"].includes(item.priority) &&
+                item.status !== "Resolved",
+            ).length,
+            AlertTriangle,
+          ],
+        ].map(([label, value, Icon]) => (
+          <div
+            key={label}
+            className="rounded-xl border border-[#e6dee4] bg-white p-5 shadow-sm"
+          >
+            <div className="flex justify-between">
+              <div>
+                <p className="text-sm text-slate-500">{label}</p>
+                <p className="mt-2 text-3xl font-bold text-[#31232e]">
+                  {value}
+                </p>
+              </div>
+              <div className="h-fit rounded-lg bg-[#f1eaf0] p-2.5 text-[#4f3448]">
+                <Icon size={20} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <section className="rounded-xl border border-[#e6dee4] bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-[#e6dee4] p-5">
+          <div className="relative flex-1">
+            <Search
+              className="absolute left-3 top-3 text-slate-400"
+              size={18}
+            />
+            <input
+              className="w-full rounded-lg border border-[#ddd3da] py-2.5 pl-10 pr-3 outline-none"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search request, asset, issue or technician..."
+            />
+          </div>
+          <select
+            className="rounded-lg border border-[#ddd3da] px-3 py-2.5 text-sm"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          >
+            {statuses.map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1250px] text-left text-sm">
+            <thead>
+              <tr className="border-b bg-[#fcfafb] text-xs uppercase text-slate-500">
+                {[
+                  "Request",
+                  "Asset",
+                  "Issue",
+                  "Priority",
+                  "Raised By",
+                  "Technician",
+                  "Status",
+                  "Actions",
+                ].map((item) => (
+                  <th key={item} className="px-4 py-3">
+                    {item}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((item) => (
+                <tr key={item.id} className="border-b border-slate-100">
+                  <td className="px-4 py-4">
+                    <p className="font-semibold text-[#4f3448]">{item.id}</p>
+                    <p className="text-xs text-slate-500">{item.raisedOn}</p>
+                  </td>
+                  <td className="px-4 py-4">
+                    <p className="font-medium text-[#31232e]">
+                      {item.assetName}
+                    </p>
+                    <p className="text-xs text-slate-500">{item.assetTag}</p>
+                  </td>
+                  <td className="max-w-72 px-4 py-4 text-slate-600">
+                    {item.issue}
+                  </td>
+                  <td className="px-4 py-4">
+                    <Priority value={item.priority} />
+                  </td>
+                  <td className="px-4 py-4 text-slate-600">{item.raisedBy}</td>
+                  <td className="px-4 py-4 text-slate-600">
+                    {item.technician || "Not assigned"}
+                  </td>
+                  <td className="px-4 py-4">
+                    <Status value={item.status} />
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-3">
+                      <button
+                        title="View history"
+                        className="text-[#4f3448]"
+                        onClick={() => setSelected(item)}
+                      >
+                        <Eye size={17} />
+                      </button>
+                      {item.status === "Pending" && (
+                        <>
+                          <button
+                            className="font-medium text-emerald-700 hover:underline"
+                            onClick={() => approve(item)}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="font-medium text-red-700 hover:underline"
+                            onClick={() => reject(item)}
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      {item.status === "Approved" && (
+                        <button
+                          className="font-medium text-[#4f3448] hover:underline"
+                          onClick={() =>
+                            setAssigning({ id: item.id, technician: "" })
+                          }
+                        >
+                          Assign Technician
+                        </button>
+                      )}
+                      {item.status === "Technician Assigned" && (
+                        <button
+                          className="font-medium text-[#4f3448] hover:underline"
+                          onClick={() => startWork(item)}
+                        >
+                          Start Work
+                        </button>
+                      )}
+                      {item.status === "In Progress" && (
+                        <button
+                          className="font-medium text-emerald-700 hover:underline"
+                          onClick={() =>
+                            setResolving({
+                              id: item.id,
+                              assetTag: item.assetTag,
+                              resolution: "",
+                            })
+                          }
+                        >
+                          Resolve
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {raiseForm && (
+        <RaiseModal
+          form={raiseForm}
+          setForm={setRaiseForm}
+          assets={assets}
+          submit={raise}
+          close={() => setRaiseForm(null)}
+        />
+      )}
+      {assigning && (
+        <SimpleModal
+          title="Assign Technician"
+          action="Assign"
+          submit={assign}
+          close={() => setAssigning(null)}
+        >
+          <Field label="Technician">
+            <select
+              required
+              className={input}
+              value={assigning.technician}
+              onChange={(event) =>
+                setAssigning({ ...assigning, technician: event.target.value })
+              }
+            >
+              <option value="">Select technician</option>
+              {technicians.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </Field>
+        </SimpleModal>
+      )}
+      {resolving && (
+        <SimpleModal
+          title="Resolve Maintenance Request"
+          action="Mark Resolved"
+          submit={resolve}
+          close={() => setResolving(null)}
+        >
+          <Field label="Resolution Notes">
+            <textarea
+              required
+              className={input}
+              rows="5"
+              value={resolving.resolution}
+              onChange={(event) =>
+                setResolving({ ...resolving, resolution: event.target.value })
+              }
+              placeholder="Describe the work completed and final asset condition..."
+            />
+          </Field>
+          <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-700">
+            Resolving this request will change the asset status to Available.
+          </p>
+        </SimpleModal>
+      )}
+      {selected && (
+        <HistoryPanel
+          request={selected}
+          asset={assets.find((item) => item.tag === selected.assetTag)}
+          close={() => setSelected(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+const input =
+  "mt-2 w-full rounded-lg border border-[#ddd3da] px-3 py-2.5 outline-none focus:border-[#4f3448]";
+function RaiseModal({ form, setForm, assets, submit, close }) {
+  const update = (event) => {
+    const { name, value, files } = event.target;
+    setForm({ ...form, [name]: files ? files[0]?.name || "" : value });
+  };
+  return (
+    <SimpleModal
+      title="Raise Maintenance Request"
+      action="Submit Request"
+      submit={submit}
+      close={close}
+    >
+      <div className="space-y-4">
+        <Field label="Asset">
+          <select
+            required
+            className={input}
+            name="assetTag"
+            value={form.assetTag}
+            onChange={update}
+          >
+            <option value="">Select asset</option>
+            {assets.map((item) => (
+              <option key={item.tag} value={item.tag}>
+                {item.tag} · {item.name} · {item.status}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Issue Description">
+          <textarea
+            required
+            className={input}
+            name="issue"
+            rows="4"
+            value={form.issue}
+            onChange={update}
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Priority">
+            <select
+              className={input}
+              name="priority"
+              value={form.priority}
+              onChange={update}
+            >
+              {["Low", "Medium", "High", "Critical"].map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Raised By">
+            <input
+              required
+              className={input}
+              name="raisedBy"
+              value={form.raisedBy}
+              onChange={update}
+            />
+          </Field>
+        </div>
+        <Field label="Issue Photo (optional)">
+          <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#cdbfc9] p-3 text-sm text-slate-500">
+            <Camera size={17} />
+            {form.photo || "Attach photo"}
+            <input
+              hidden
+              name="photo"
+              type="file"
+              accept="image/*"
+              onChange={update}
+            />
+          </label>
+        </Field>
+        <p className="rounded-lg bg-[#f7f3f6] p-3 text-xs text-[#4f3448]">
+          New requests start as Pending. The asset status changes only after
+          approval.
+        </p>
+      </div>
+    </SimpleModal>
+  );
+}
+function SimpleModal({ title, action, submit, close, children }) {
+  return (
+    <div className="fixed inset-0 z-20 grid place-items-center bg-black/35 p-6">
+      <form
+        className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl"
+        onSubmit={submit}
+      >
+        <div className="mb-5 flex justify-between">
+          <h2 className="text-xl font-semibold text-[#31232e]">{title}</h2>
+          <button type="button" onClick={close}>
+            <X size={19} />
+          </button>
+        </div>
+        {children}
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            className="rounded-lg border px-4 py-2.5"
+            type="button"
+            onClick={close}
+          >
+            Cancel
+          </button>
+          <button
+            className="rounded-lg bg-[#4f3448] px-4 py-2.5 font-medium text-white"
+            type="submit"
+          >
+            {action}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+function HistoryPanel({ request, asset, close }) {
+  return (
+    <div className="fixed inset-0 z-20 flex justify-end bg-black/25">
+      <div className="h-full w-[520px] overflow-y-auto bg-white p-6 shadow-xl">
+        <div className="flex justify-between">
+          <div>
+            <p className="font-semibold text-[#4f3448]">{request.id}</p>
+            <h2 className="mt-1 text-xl font-semibold text-[#31232e]">
+              {request.assetName}
+            </h2>
+            <p className="text-sm text-slate-500">
+              Asset status: {asset?.status || "Unknown"}
+            </p>
+          </div>
+          <button onClick={close}>
+            <X size={19} />
+          </button>
+        </div>
+        <div className="mt-6 rounded-lg bg-[#f8f5f7] p-4">
+          <p className="text-sm font-medium text-[#31232e]">{request.issue}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            Priority: {request.priority} · Technician:{" "}
+            {request.technician || "Not assigned"}
+          </p>
+        </div>
+        <h3 className="mt-6 font-semibold text-[#31232e]">
+          Maintenance History
+        </h3>
+        <div className="mt-4 space-y-4">
+          {request.history.map((item, index) => (
+            <div
+              key={`${item.event}-${index}`}
+              className="border-l-2 border-[#d9ccd5] pb-4 pl-4"
+            >
+              <p className="font-medium text-[#31232e]">{item.event}</p>
+              <p className="text-xs text-slate-500">{item.date}</p>
+              <p className="mt-1 text-sm text-slate-600">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+function Field({ label, children }) {
+  return (
+    <label className="block text-sm font-medium text-slate-700">
+      {label}
+      {children}
+    </label>
+  );
+}
+function Priority({ value }) {
+  const style = {
+    Low: "bg-slate-100 text-slate-600",
+    Medium: "bg-blue-50 text-blue-700",
+    High: "bg-amber-50 text-amber-700",
+    Critical: "bg-red-50 text-red-700",
+  };
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${style[value]}`}
+    >
+      {value}
+    </span>
+  );
+}
+function Status({ value }) {
+  const style = {
+    Pending: "bg-amber-50 text-amber-700",
+    Approved: "bg-blue-50 text-blue-700",
+    Rejected: "bg-red-50 text-red-700",
+    "Technician Assigned": "bg-violet-50 text-violet-700",
+    "In Progress": "bg-cyan-50 text-cyan-700",
+    Resolved: "bg-emerald-50 text-emerald-700",
+  };
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${style[value]}`}
+    >
+      {value}
+    </span>
+  );
+}

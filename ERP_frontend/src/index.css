@@ -1,1 +1,194 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 @import "tailwindcss";
+
+*{
+      font-family: "Inter", sans-serif;
+
+}
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  color: #172033;
+}
+button {
+  cursor: pointer;
+}
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+  background: #fbfafb;
+}
+.desktop-sidebar {
+  flex: 0 0 260px;
+  transition: flex-basis 180ms ease;
+}
+.desktop-sidebar.is-collapsed {
+  flex-basis: 88px;
+}
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  width: 260px;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 22px 16px;
+  border-right: 1px solid #e7e0e5;
+  background: linear-gradient(180deg, #fff 0%, #fcfafb 100%);
+  transition: width 180ms ease, padding 180ms ease;
+}
+.app-sidebar.is-collapsed {
+  width: 88px;
+  padding-inline: 14px;
+}
+.sidebar-brand {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 11px;
+  padding: 0 4px;
+}
+.brand-mark {
+  display: grid;
+  flex: 0 0 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 11px;
+  color: white;
+  background: #4f3448;
+  box-shadow: 0 6px 16px rgba(79, 52, 72, 0.22);
+}
+.sidebar-brand strong {
+  display: block;
+  color: #31232e;
+  font-size: 16px;
+}
+.sidebar-brand span {
+  display: block;
+  margin-top: 1px;
+  color: #8b7886;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.sidebar-collapse-button {
+  display: grid;
+  flex: 0 0 30px;
+  height: 30px;
+  margin-left: auto;
+  place-items: center;
+  border: 1px solid #e5dce3;
+  border-radius: 8px;
+  color: #6d5667;
+  background: white;
+}
+.app-sidebar.is-collapsed .sidebar-collapse-button {
+  position: absolute;
+  top: 68px;
+  left: 29px;
+}
+.sidebar-section-label {
+  margin: 28px 10px 8px;
+  color: #9b8996;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.app-sidebar nav {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+.app-sidebar nav a {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 9px;
+  color: #574b54;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 150ms ease, color 150ms ease, transform 150ms ease;
+}
+.app-sidebar nav a:hover {
+  color: #4f3448;
+  background: #f7f2f5;
+}
+.app-sidebar nav a.active {
+  color: #fff;
+  background: #4f3448;
+  box-shadow: 0 5px 12px rgba(79, 52, 72, .18);
+}
+.app-sidebar.is-collapsed nav {
+  margin-top: 56px;
+}
+.app-sidebar.is-collapsed nav a {
+  justify-content: center;
+  padding-inline: 0;
+}
+.app-sidebar.is-collapsed nav a span {
+  display: none;
+}
+.sidebar-role {
+  position: absolute;
+  right: 16px;
+  bottom: 18px;
+  left: 16px;
+  padding: 12px;
+  border: 1px solid #eadfe7;
+  border-radius: 10px;
+  background: #f7f3f6;
+}
+.sidebar-role span,
+.sidebar-role strong {
+  display: block;
+}
+.sidebar-role span {
+  color: #8b7886;
+  font-size: 10px;
+}
+.sidebar-role strong {
+  margin-top: 3px;
+  color: #4f3448;
+  font-size: 11px;
+}
+.dashboard-content {
+  min-width: 0;
+  flex: 1;
+}
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  height: 64px;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  border-bottom: 1px solid #e7e0e5;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 1px 8px rgba(58, 39, 53, .04);
+}
+.dashboard-content main {
+  min-width: 0;
+  padding: 32px;
+}
+.mobile-sidebar {
+  position: fixed;
+  inset: 0;
+  background: white;
+  z-index: 10;
+}
+@media (min-width: 769px) {
+  .header-menu-button,
+  .mobile-sidebar {
+    display: none;
+  }
+}
+@media (max-width: 768px) {
+  .desktop-sidebar {
+    display: none;
+  }
+}
