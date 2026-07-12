@@ -11,303 +11,225 @@ import {
   ShieldAlert,
   X,
 } from "lucide-react";
+import { API_ENDPOINTS } from "../../config/apis";
 
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
-const people = [
-  "Priya Sharma",
-  "Raj Malhotra",
-  "Neha Kapoor",
-  "Aman Gupta",
-  "Rahul Verma",
-];
-const departments = [
-  "Information Technology",
-  "Human Resources",
-  "Finance",
-  "Operations",
-  "Administration",
-];
-const initialAssets = [
-  {
-    tag: "AF-0114",
-    name: "Dell Latitude 5440",
-    status: "Allocated",
-    holder: "Priya Sharma",
-    department: "Information Technology",
-  },
-  {
-    tag: "AF-0087",
-    name: "Epson Projector",
-    status: "Allocated",
-    holder: "Operations Department",
-    department: "Operations",
-  },
-  {
-    tag: "AF-0172",
-    name: "iPhone 15",
-    status: "Available",
-    holder: "",
-    department: "",
-  },
-  {
-    tag: "AF-0201",
-    name: "HP EliteBook",
-    status: "Available",
-    holder: "",
-    department: "",
-  },
-];
-const initialAllocations = [
-  {
-    id: "AL-0184",
-    assetTag: "AF-0114",
-    assetName: "Dell Latitude 5440",
-    holder: "Priya Sharma",
-    holderType: "Employee",
-    department: "Information Technology",
-    allocatedOn: "2026-06-02",
-    expectedReturn: "2026-07-08",
-    status: "Active",
-    history: ["Allocated to Priya Sharma on 02 Jun 2026"],
-  },
-  {
-    id: "AL-0179",
-    assetTag: "AF-0087",
-    assetName: "Epson Projector",
-    holder: "Operations Department",
-    holderType: "Department",
-    department: "Operations",
-    allocatedOn: "2026-06-18",
-    expectedReturn: "2026-07-20",
-    status: "Active",
-    history: ["Allocated to Operations on 18 Jun 2026"],
-  },
-];
-const initialTransfers = [
-  {
-    id: "TR-0091",
-    assetTag: "AF-0114",
-    assetName: "Dell Latitude 5440",
-    from: "Priya Sharma",
-    to: "Raj Malhotra",
-    department: "Information Technology",
-    reason: "Project reassignment",
-    requestedOn: "2026-07-11",
-    status: "Requested",
-  },
-];
-
-const readStored = (key, fallback) => {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || fallback;
-  } catch {
-    return fallback;
-  }
-};
 
 export default function AllocationTransfers() {
   const [tab, setTab] = useState("allocations");
-  const [assets, setAssets] = useState(() => readStored("assetflow_assets", initialAssets));
-  const [allocations, setAllocations] = useState(() => readStored("assetflow_allocations", initialAllocations));
-  const [transfers, setTransfers] = useState(() => readStored("assetflow_transfers", initialTransfers));
-  const [returns, setReturns] = useState(() => readStored("assetflow_returns", []));
-  const [returnRequests, setReturnRequests] = useState(() => readStored("assetflow_return_requests", []));
+  
+  // Data states
+  const [assets, setAssets] = useState([]);
+  const [allocations, setAllocations] = useState([]);
+  const [transfers, setTransfers] = useState([]);
+  const [returns, setReturns] = useState([]);
+  
+  // Metadata for dropdowns
+  const [departments, setDepartments] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  
   const [search, setSearch] = useState("");
+  
+  // Modal states
   const [allocateForm, setAllocateForm] = useState(null);
   const [transferForm, setTransferForm] = useState(null);
   const [returnForm, setReturnForm] = useState(null);
-  const active = allocations.filter((item) => item.status === "Active");
-  const overdue = active.filter(
-    (item) =>
-      item.expectedReturn &&
-      new Date(`${item.expectedReturn}T00:00:00`) < TODAY,
-  );
+  
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const token = localStorage.getItem("assetflow_token");
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [allocRes, transRes, retRes, assetRes, metaRes] = await Promise.all([
+        fetch(API_ENDPOINTS.ALLOCATIONS.BASE, { headers }),
+        fetch(API_ENDPOINTS.ALLOCATIONS.TRANSFERS, { headers }),
+        fetch(API_ENDPOINTS.ALLOCATIONS.RETURNS_HISTORY, { headers }),
+        fetch(API_ENDPOINTS.ASSETS.GET_ALL, { headers }),
+        fetch(API_ENDPOINTS.ASSETS.METADATA, { headers })
+      ]);
+
+      const [allocData, transData, retData, assetData, metaData] = await Promise.all([
+        allocRes.json(), transRes.json(), retRes.json(), assetRes.json(), metaRes.json()
+      ]);
+
+      if (allocData.success) setAllocations(allocData.data);
+      if (transData.success) setTransfers(transData.data);
+      if (retData.success) setReturns(retData.data);
+      if (assetData.success) setAssets(assetData.data);
+      if (metaData.success) {
+        setDepartments(metaData.data.departments);
+        setEmployees(metaData.data.employees);
+      }
+    } catch (err) {
+      setError("Failed to fetch data. Please try again.");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem(
-      "assetflow_overdue_allocations",
-      JSON.stringify(overdue),
-    );
-  }, [overdue]);
-  useEffect(() => {
-    localStorage.setItem("assetflow_assets", JSON.stringify(assets));
-  }, [assets]);
-  useEffect(() => {
-    localStorage.setItem("assetflow_allocations", JSON.stringify(allocations));
-  }, [allocations]);
-  useEffect(() => {
-    localStorage.setItem("assetflow_transfers", JSON.stringify(transfers));
-  }, [transfers]);
-  useEffect(() => {
-    localStorage.setItem("assetflow_returns", JSON.stringify(returns));
-  }, [returns]);
-  useEffect(() => {
-    localStorage.setItem("assetflow_return_requests", JSON.stringify(returnRequests));
-  }, [returnRequests]);
+    fetchData();
+  }, []);
+
+  // Derived state
+  const availableAssets = assets.filter(a => a.status === 'Available');
+  const active = allocations;
+  const overdue = active.filter(
+    (item) =>
+      item.expected_return_date &&
+      new Date(item.expected_return_date) < TODAY,
+  );
+
   const visible = useMemo(
     () =>
       active.filter((item) =>
-        [item.assetTag, item.assetName, item.holder, item.department].some(
-          (value) => value.toLowerCase().includes(search.toLowerCase()),
+        [item.asset_tag, item.asset_name, item.first_name, item.department_name].some(
+          (value) => value && value.toLowerCase().includes(search.toLowerCase()),
         ),
       ),
     [active, search],
   );
-  const selectedAsset =
-    allocateForm && assets.find((item) => item.tag === allocateForm.assetTag);
-  const conflict =
-    selectedAsset?.status !== "Available"
-      ? active.find((item) => item.assetTag === selectedAsset?.tag) || {
-          assetTag: selectedAsset?.tag,
-          holder: selectedAsset?.holder || "another holder or workflow",
-          department: selectedAsset?.department || "",
-        }
-      : null;
 
-  const allocate = (event) => {
+  const selectedAsset =
+    allocateForm && availableAssets.find((item) => item.id === allocateForm.asset_id);
+
+  // Since we only show available assets in the allocate dropdown, conflict should technically never happen naturally,
+  // but we keep the UI logic just in case an asset was selected right before someone else took it.
+  const conflict = null; 
+
+  const handleAllocate = async (event) => {
     event.preventDefault();
-    if (!selectedAsset || conflict) return;
-    const holder =
-      allocateForm.holderType === "Employee"
-        ? allocateForm.employee
-        : allocateForm.department;
-    const department =
-      allocateForm.holderType === "Employee"
-        ? allocateForm.employeeDepartment
-        : allocateForm.department;
-    const item = {
-      id: `AL-${String(185 + allocations.length).padStart(4, "0")}`,
-      assetTag: selectedAsset.tag,
-      assetName: selectedAsset.name,
-      holder,
-      holderType: allocateForm.holderType,
-      department,
-      allocatedOn: "2026-07-12",
-      expectedReturn: allocateForm.expectedReturn,
-      status: "Active",
-      history: [`Allocated to ${holder} on 12 Jul 2026`],
-    };
-    setAllocations([...allocations, item]);
-    setAssets(
-      assets.map((asset) =>
-        asset.tag === item.assetTag
-          ? { ...asset, status: "Allocated", holder, department, allocationHistory: [...(asset.allocationHistory || []), { event: `Allocated to ${holder}`, date: "12 Jul 2026", detail: department }] }
-          : asset,
-      ),
-    );
-    setAllocateForm(null);
+    if (!selectedAsset) return;
+
+    try {
+      const payload = {
+        asset_id: allocateForm.asset_id,
+        employee_id: allocateForm.holderType === "Employee" ? allocateForm.employee_id : null,
+        department_id: allocateForm.holderType === "Department" ? allocateForm.department_id : (allocateForm.employee_department_id || null),
+        expected_return_date: allocateForm.expectedReturn || null
+      };
+
+      const res = await fetch(API_ENDPOINTS.ALLOCATIONS.ALLOCATE, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAllocateForm(null);
+        fetchData();
+      } else {
+        alert(data.error || "Failed to allocate");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error allocating asset");
+    }
   };
-  const requestTransfer = (event) => {
+
+  const requestTransfer = async (event) => {
     event.preventDefault();
-    const current = active.find(
-      (item) => item.assetTag === transferForm.assetTag,
-    );
-    setTransfers([
-      ...transfers,
-      {
-        id: `TR-${String(92 + transfers.length).padStart(4, "0")}`,
-        assetTag: current.assetTag,
-        assetName: current.assetName,
-        from: current.holder,
-        to: transferForm.to,
-        department: transferForm.department,
-        reason: transferForm.reason,
-        requestedOn: "2026-07-12",
-        status: "Requested",
-      },
-    ]);
-    setTransferForm(null);
-    setTab("transfers");
+    try {
+      const payload = {
+        asset_id: transferForm.asset_id,
+        destination_department_id: transferForm.department_id,
+        reason: transferForm.reason
+      };
+
+      const res = await fetch(API_ENDPOINTS.ALLOCATIONS.REQUEST_TRANSFER, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTransferForm(null);
+        setTab("transfers");
+        fetchData();
+      } else {
+        alert(data.error || "Failed to request transfer");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error requesting transfer");
+    }
   };
-  const approve = (request) => {
-    setTransfers(
-      transfers.map((item) =>
-        item.id === request.id ? { ...item, status: "Approved" } : item,
-      ),
-    );
-    setAllocations(
-      allocations.map((item) =>
-        item.assetTag === request.assetTag && item.status === "Active"
-          ? {
-              ...item,
-              holder: request.to,
-              department: request.department,
-              history: [
-                ...item.history,
-                `Transferred from ${request.from} to ${request.to} on 12 Jul 2026`,
-              ],
-            }
-          : item,
-      ),
-    );
-    setAssets(
-      assets.map((item) =>
-        item.tag === request.assetTag
-          ? { ...item, holder: request.to, department: request.department, allocationHistory: [...(item.allocationHistory || []), { event: `Transferred from ${request.from} to ${request.to}`, date: "12 Jul 2026", detail: request.department }] }
-          : item,
-      ),
-    );
+
+  const approve = async (request) => {
+    if (!confirm("Are you sure you want to approve this transfer and re-allocate the asset?")) return;
+    try {
+      const res = await fetch(API_ENDPOINTS.ALLOCATIONS.APPROVE_TRANSFER(request.id), {
+        method: 'POST',
+        headers
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchData();
+      } else {
+        alert(data.error || "Failed to approve transfer");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error approving transfer");
+    }
   };
-  const processReturn = (event) => {
+
+  const processReturn = async (event) => {
     event.preventDefault();
-    const current = active.find((item) => item.id === returnForm.id);
-    setAllocations(
-      allocations.map((item) =>
-        item.id === current.id
-          ? {
-              ...item,
-              status: "Returned",
-              history: [
-                ...item.history,
-                `Returned on 12 Jul 2026 · ${returnForm.condition}`,
-              ],
-            }
-          : item,
-      ),
-    );
-    setAssets(
-      assets.map((item) =>
-        item.tag === current.assetTag
-          ? { ...item, status: "Available", holder: "", department: "", allocationHistory: [...(item.allocationHistory || []), { event: `Returned by ${current.holder}`, date: "12 Jul 2026", detail: `Condition: ${returnForm.condition}` }] }
-          : item,
-      ),
-    );
-    setReturns([
-      {
-        id: `RT-${String(returns.length + 1).padStart(4, "0")}`,
-        assetTag: current.assetTag,
-        assetName: current.assetName,
-        holder: current.holder,
-        condition: returnForm.condition,
+    try {
+      const payload = {
+        allocation_id: returnForm.id,
         notes: returnForm.notes,
-        date: "12 Jul 2026",
-      },
-      ...returns,
-    ]);
-    setReturnForm(null);
-    setTab("returns");
+        condition: returnForm.condition
+      };
+
+      const res = await fetch(API_ENDPOINTS.ALLOCATIONS.RETURN, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReturnForm(null);
+        setTab("returns");
+        fetchData();
+      } else {
+        alert(data.error || "Failed to return asset");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error returning asset");
+    }
   };
+
   const openTransfer = (item) =>
     setTransferForm({
-      assetTag: item.assetTag,
-      to: "",
-      department: item.department,
+      asset_id: item.asset_id,
+      assetName: item.asset_name,
+      assetTag: item.asset_tag,
+      department_id: "",
       reason: "",
     });
-  const decideReturnRequest = (request, status) => {
-    setReturnRequests(returnRequests.map((item) => item.id === request.id ? { ...item, status } : item));
-  };
-  const openConflictTransfer = () => {
-    openTransfer(conflict);
-    setAllocateForm(null);
-  };
+
   const tabs = [
     ["allocations", "Active Allocations", PackageCheck],
     ["transfers", "Transfer Requests", ArrowRightLeft],
     ["returns", "Returns", RotateCcw],
     ["overdue", "Overdue", Clock3],
   ];
+
+  if (loading && allocations.length === 0) {
+    return <div className="p-10 text-center text-slate-500">Loading allocation data...</div>;
+  }
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
@@ -326,11 +248,11 @@ export default function AllocationTransfers() {
           className="inline-flex items-center gap-2 rounded-lg bg-[#4f3448] px-4 py-2.5 text-sm font-medium text-white"
           onClick={() =>
             setAllocateForm({
-              assetTag: "",
+              asset_id: "",
               holderType: "Employee",
-              employee: "",
-              employeeDepartment: "",
-              department: "",
+              employee_id: "",
+              employee_department_id: "",
+              department_id: "",
               expectedReturn: "",
             })
           }
@@ -339,17 +261,24 @@ export default function AllocationTransfers() {
           Allocate Asset
         </button>
       </div>
+      
+      {error && (
+        <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="grid grid-cols-4 gap-4">
         {[
           ["Active Allocations", active.length, PackageCheck],
           [
             "Available Assets",
-            assets.filter((item) => item.status === "Available").length,
+            availableAssets.length,
             Check,
           ],
           [
             "Pending Transfers",
-            transfers.filter((item) => item.status === "Requested").length,
+            transfers.filter((item) => item.status === "PENDING").length,
             ArrowRightLeft,
           ],
           ["Overdue", overdue.length, ShieldAlert],
@@ -382,7 +311,7 @@ export default function AllocationTransfers() {
             <Icon size={17} />
             {label}
             {id === "overdue" && overdue.length > 0 && (
-              <span className="rounded-full bg-red-500 px-2 text-xs">
+              <span className="rounded-full bg-red-500 px-2 text-xs text-white">
                 {overdue.length}
               </span>
             )}
@@ -410,7 +339,7 @@ export default function AllocationTransfers() {
             overdue={overdue}
             onTransfer={openTransfer}
             onReturn={(item) =>
-              setReturnForm({ id: item.id, condition: "Good", notes: "" })
+              setReturnForm({ id: item.id, asset_name: item.asset_name, asset_tag: item.asset_tag, holder: item.first_name ? `${item.first_name} ${item.last_name}` : item.department_name, condition: "Good", notes: "" })
             }
           />
         )}
@@ -420,33 +349,32 @@ export default function AllocationTransfers() {
             overdue={overdue}
             onTransfer={openTransfer}
             onReturn={(item) =>
-              setReturnForm({ id: item.id, condition: "Good", notes: "" })
+              setReturnForm({ id: item.id, asset_name: item.asset_name, asset_tag: item.asset_tag, holder: item.first_name ? `${item.first_name} ${item.last_name}` : item.department_name, condition: "Good", notes: "" })
             }
           />
         )}
         {tab === "transfers" && (
           <Transfers rows={transfers} approve={approve} />
         )}
-        {tab === "returns" && <Returns rows={returns} requests={returnRequests} decide={decideReturnRequest} />}
+        {tab === "returns" && <Returns rows={returns} />}
       </section>
+      
       {allocateForm && (
         <AllocateModal
           form={allocateForm}
           setForm={setAllocateForm}
-          assets={assets}
-          conflict={conflict}
-          submit={allocate}
+          assets={availableAssets}
+          departments={departments}
+          employees={employees}
+          submit={handleAllocate}
           close={() => setAllocateForm(null)}
-          transfer={openConflictTransfer}
         />
       )}
       {transferForm && (
         <TransferModal
           form={transferForm}
           setForm={setTransferForm}
-          current={active.find(
-            (item) => item.assetTag === transferForm.assetTag,
-          )}
+          departments={departments}
           submit={requestTransfer}
           close={() => setTransferForm(null)}
         />
@@ -455,7 +383,6 @@ export default function AllocationTransfers() {
         <ReturnModal
           form={returnForm}
           setForm={setReturnForm}
-          current={active.find((item) => item.id === returnForm.id)}
           submit={processReturn}
           close={() => setReturnForm(null)}
         />
@@ -465,6 +392,7 @@ export default function AllocationTransfers() {
 }
 
 function AllocationTable({ rows, overdue, onTransfer, onReturn }) {
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString() : 'N/A';
   return (
     <Table
       headers={[
@@ -480,22 +408,25 @@ function AllocationTable({ rows, overdue, onTransfer, onReturn }) {
     >
       {rows.map((item) => {
         const late = overdue.some((row) => row.id === item.id);
+        const holderName = item.first_name ? `${item.first_name} ${item.last_name}` : item.department_name;
+        const holderType = item.first_name ? 'Employee' : 'Department';
+
         return (
-          <tr key={item.id} className="border-b border-slate-100">
-            <Cell strong>{item.id}</Cell>
+          <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+            <Cell strong className="text-xs">{item.id.substring(0,8)}...</Cell>
             <Cell>
-              {item.assetName}
-              <small>{item.assetTag}</small>
+              <div className="font-medium">{item.asset_name}</div>
+              <div className="text-xs text-slate-500">{item.asset_tag}</div>
             </Cell>
             <Cell>
-              {item.holder}
-              <small>{item.holderType}</small>
+              <div className="font-medium">{holderName}</div>
+              <div className="text-xs text-slate-500">{holderType}</div>
             </Cell>
-            <Cell>{item.department}</Cell>
-            <Cell>{item.allocatedOn}</Cell>
+            <Cell>{item.department_name || '-'}</Cell>
+            <Cell>{formatDate(item.allocated_date)}</Cell>
             <Cell danger={late}>
-              {item.expectedReturn || "No return date"}
-              {late && <small>Overdue</small>}
+              {formatDate(item.expected_return_date)}
+              {late && <div className="text-xs mt-0.5">Overdue</div>}
             </Cell>
             <Cell>
               <Badge type={late ? "danger" : "info"}>
@@ -519,16 +450,21 @@ function AllocationTable({ rows, overdue, onTransfer, onReturn }) {
           </tr>
         );
       })}
+      {rows.length === 0 && (
+        <tr><td colSpan="8" className="p-6 text-center text-slate-500">No active allocations found.</td></tr>
+      )}
     </Table>
   );
 }
+
 function Transfers({ rows, approve }) {
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString() : 'N/A';
   return (
     <Table
       headers={[
         "Request",
         "Asset",
-        "From",
+        "From Dept",
         "Transfer To",
         "Reason",
         "Requested",
@@ -537,23 +473,23 @@ function Transfers({ rows, approve }) {
       ]}
     >
       {rows.map((item) => (
-        <tr key={item.id} className="border-b border-slate-100">
-          <Cell strong>{item.id}</Cell>
+        <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+          <Cell strong className="text-xs">{item.id.substring(0,8)}...</Cell>
           <Cell>
-            {item.assetName}
-            <small>{item.assetTag}</small>
+            <div className="font-medium">{item.asset_name}</div>
+            <div className="text-xs text-slate-500">{item.asset_tag}</div>
           </Cell>
-          <Cell>{item.from}</Cell>
-          <Cell>{item.to}</Cell>
-          <Cell>{item.reason}</Cell>
-          <Cell>{item.requestedOn}</Cell>
+          <Cell>{item.from_department}</Cell>
+          <Cell>{item.to_department}</Cell>
+          <Cell className="max-w-[200px] truncate" title={item.reason}>{item.reason}</Cell>
+          <Cell>{formatDate(item.requested_on)}</Cell>
           <Cell>
-            <Badge type={item.status === "Approved" ? "success" : "warning"}>
+            <Badge type={item.status === "APPROVED" ? "success" : item.status === "REJECTED" ? "danger" : "warning"}>
               {item.status}
             </Badge>
           </Cell>
           <Cell>
-            {item.status === "Requested" ? (
+            {item.status === "PENDING" ? (
               <button
                 className="font-medium text-emerald-700 hover:underline"
                 onClick={() => approve(item)}
@@ -561,48 +497,56 @@ function Transfers({ rows, approve }) {
                 Approve & Re-allocate
               </button>
             ) : (
-              <span className="text-xs text-slate-400">History updated</span>
+              <span className="text-xs text-slate-400">
+                {item.status === "APPROVED" ? `Approved on ${formatDate(item.transfer_date)}` : "Rejected"}
+              </span>
             )}
           </Cell>
         </tr>
       ))}
+      {rows.length === 0 && (
+        <tr><td colSpan="8" className="p-6 text-center text-slate-500">No transfer requests found.</td></tr>
+      )}
     </Table>
   );
 }
-function Returns({ rows, requests, decide }) {
+
+function Returns({ rows }) {
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString() : 'N/A';
   return (
-    <><Table headers={["Request ID", "Asset", "Requested By", "Department", "Preferred Date", "Reason", "Status", "Action"]}>
-      {requests.map((item) => <tr key={item.id} className="border-b border-slate-100"><Cell strong>{item.id}</Cell><Cell>{item.assetName}<small>{item.assetTag}</small></Cell><Cell>{item.requestedBy}</Cell><Cell>{item.department}</Cell><Cell>{item.preferredDate}</Cell><Cell>{item.reason}</Cell><Cell><Badge type={item.status === "Approved" ? "success" : item.status === "Rejected" ? "danger" : "warning"}>{item.status}</Badge></Cell><Cell>{item.status === "Requested" && <><button className="mr-3 font-medium text-emerald-700" onClick={() => decide(item, "Approved")}>Approve</button><button className="font-medium text-red-700" onClick={() => decide(item, "Rejected")}>Reject</button></>}</Cell></tr>)}
-    </Table><h3 className="border-y border-[#e6dee4] bg-[#fcfafb] px-4 py-3 text-sm font-semibold text-[#31232e]">Completed Returns</h3><Table
+    <Table
       headers={[
         "Return ID",
         "Asset",
         "Returned By",
+        "Department",
         "Date",
-        "Condition",
         "Notes",
-        "Asset Status",
       ]}
     >
-      {rows.map((item) => (
-        <tr key={item.id} className="border-b border-slate-100">
-          <Cell strong>{item.id}</Cell>
-          <Cell>
-            {item.assetName}
-            <small>{item.assetTag}</small>
-          </Cell>
-          <Cell>{item.holder}</Cell>
-          <Cell>{item.date}</Cell>
-          <Cell>{item.condition}</Cell>
-          <Cell>{item.notes}</Cell>
-          <Cell>
-            <Badge type="success">Available</Badge>
-          </Cell>
-        </tr>
-      ))}
-    </Table></>
+      {rows.map((item) => {
+        const holderName = item.first_name ? `${item.first_name} ${item.last_name}` : item.department_name;
+        return (
+          <tr key={item.return_id} className="border-b border-slate-100 hover:bg-slate-50">
+            <Cell strong className="text-xs">{item.return_id.substring(0,8)}...</Cell>
+            <Cell>
+              <div className="font-medium">{item.asset_name}</div>
+              <div className="text-xs text-slate-500">{item.asset_tag}</div>
+            </Cell>
+            <Cell>{holderName}</Cell>
+            <Cell>{item.department_name || '-'}</Cell>
+            <Cell>{formatDate(item.date)}</Cell>
+            <Cell className="max-w-[250px] truncate" title={item.notes}>{item.notes}</Cell>
+          </tr>
+        )
+      })}
+      {rows.length === 0 && (
+        <tr><td colSpan="6" className="p-6 text-center text-slate-500">No completed returns found.</td></tr>
+      )}
+    </Table>
   );
 }
+
 function Table({ headers, children }) {
   return (
     <div className="overflow-x-auto">
@@ -621,15 +565,17 @@ function Table({ headers, children }) {
     </div>
   );
 }
-function Cell({ children, strong, danger }) {
+
+function Cell({ children, strong, danger, className = "" }) {
   return (
     <td
-      className={`px-4 py-4 ${strong ? "font-semibold text-[#4f3448]" : danger ? "font-semibold text-red-700" : "text-slate-600"}`}
+      className={`px-4 py-4 ${strong ? "font-semibold text-[#4f3448]" : danger ? "font-semibold text-red-700" : "text-slate-600"} ${className}`}
     >
       {children}
     </td>
   );
 }
+
 function Badge({ children, type }) {
   const styles = {
     danger: "bg-red-50 text-red-700",
@@ -647,12 +593,13 @@ function Badge({ children, type }) {
 }
 
 const input =
-  "mt-2 w-full rounded-lg border border-[#ddd3da] px-3 py-2.5 outline-none focus:border-[#4f3448]";
+  "mt-2 w-full rounded-lg border border-[#ddd3da] px-3 py-2.5 outline-none focus:border-[#4f3448] bg-white";
+
 function Modal({ title, detail, submit, close, action, children }) {
   return (
-    <div className="fixed inset-0 z-20 grid place-items-center bg-black/35 p-6">
+    <div className="fixed inset-0 z-20 grid place-items-center bg-black/35 p-6 backdrop-blur-sm">
       <form
-        className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl"
+        className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl"
         onSubmit={submit}
       >
         <div className="mb-5 flex justify-between">
@@ -660,21 +607,21 @@ function Modal({ title, detail, submit, close, action, children }) {
             <h2 className="text-xl font-semibold text-[#31232e]">{title}</h2>
             <p className="mt-1 text-sm text-slate-500">{detail}</p>
           </div>
-          <button type="button" onClick={close}>
+          <button type="button" onClick={close} className="text-slate-400 hover:text-slate-700">
             <X size={19} />
           </button>
         </div>
         {children}
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-slate-100">
           <button
-            className="rounded-lg border px-4 py-2.5"
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50"
             type="button"
             onClick={close}
           >
             Cancel
           </button>
           <button
-            className="rounded-lg bg-[#4f3448] px-4 py-2.5 font-medium text-white"
+            className="rounded-lg bg-[#4f3448] px-4 py-2 text-sm font-medium text-white hover:bg-[#3d2837]"
             type="submit"
           >
             {action}
@@ -684,17 +631,19 @@ function Modal({ title, detail, submit, close, action, children }) {
     </div>
   );
 }
+
 function AllocateModal({
   form,
   setForm,
   assets,
-  conflict,
+  departments,
+  employees,
   submit,
   close,
-  transfer,
 }) {
   const update = (event) =>
     setForm({ ...form, [event.target.name]: event.target.value });
+
   return (
     <Modal
       title="Allocate Asset"
@@ -708,38 +657,19 @@ function AllocateModal({
           <select
             required
             className={input}
-            name="assetTag"
-            value={form.assetTag}
+            name="asset_id"
+            value={form.asset_id}
             onChange={update}
           >
-            <option value="">Select asset</option>
+            <option value="">Select available asset</option>
             {assets.map((item) => (
-              <option key={item.tag} value={item.tag}>
-                {item.tag} · {item.name} · {item.status}
+              <option key={item.id} value={item.id}>
+                {item.asset_tag} · {item.name}
               </option>
             ))}
           </select>
         </Field>
-        {conflict && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-            <div className="flex gap-3">
-              <AlertTriangle className="text-red-600" />
-              <div>
-                <p className="font-semibold text-red-800">Allocation blocked</p>
-                <p className="text-sm text-red-700">
-                  Currently held by <strong>{conflict.holder}</strong>.
-                </p>
-                <button
-                  className="mt-2 font-medium text-[#4f3448] underline"
-                  type="button"
-                  onClick={transfer}
-                >
-                  Create Transfer Request instead
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        
         <Field label="Allocate To">
           <select
             className={input}
@@ -747,43 +677,61 @@ function AllocateModal({
             value={form.holderType}
             onChange={update}
           >
-            <option>Employee</option>
-            <option>Department</option>
+            <option value="Employee">Employee</option>
+            <option value="Department">Department</option>
           </select>
         </Field>
+
         {form.holderType === "Employee" ? (
           <>
             <Field label="Employee">
-              <Select
-                name="employee"
-                value={form.employee}
-                values={people}
-                update={update}
-              />
+              <select
+                required
+                className={input}
+                name="employee_id"
+                value={form.employee_id}
+                onChange={update}
+              >
+                <option value="">Select Employee</option>
+                {employees.map((item) => (
+                  <option key={item.id} value={item.id}>{item.first_name} {item.last_name}</option>
+                ))}
+              </select>
             </Field>
-            <Field label="Employee Department">
-              <Select
-                name="employeeDepartment"
-                value={form.employeeDepartment}
-                values={departments}
-                update={update}
-              />
+            <Field label="Department (Optional link)">
+              <select
+                className={input}
+                name="employee_department_id"
+                value={form.employee_department_id}
+                onChange={update}
+              >
+                <option value="">None</option>
+                {departments.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
             </Field>
           </>
         ) : (
           <Field label="Department">
-            <Select
-              name="department"
-              value={form.department}
-              values={departments}
-              update={update}
-            />
+            <select
+              required
+              className={input}
+              name="department_id"
+              value={form.department_id}
+              onChange={update}
+            >
+              <option value="">Select Department</option>
+              {departments.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
           </Field>
         )}
         <Field label="Expected Return Date (optional)">
           <input
             className={input}
-            min="2026-07-12"
+            min={new Date().toISOString().split('T')[0]}
             name="expectedReturn"
             type="date"
             value={form.expectedReturn}
@@ -794,110 +742,104 @@ function AllocateModal({
     </Modal>
   );
 }
-function TransferModal({ form, setForm, current, submit, close }) {
+
+function TransferModal({ form, setForm, departments, submit, close }) {
   const update = (event) =>
     setForm({ ...form, [event.target.name]: event.target.value });
+    
   return (
     <Modal
       title="Transfer Request"
-      detail={`${current?.assetTag || ""} is currently held by ${current?.holder || ""}.`}
+      detail={`Request to transfer ${form.assetTag || ""} (${form.assetName})`}
       submit={submit}
       close={close}
       action="Submit Request"
     >
       <div className="space-y-4">
-        <Field label="Transfer To">
-          <Select
-            name="to"
-            value={form.to}
-            values={people.filter((item) => item !== current?.holder)}
-            update={update}
-          />
+        <Field label="Destination Department">
+          <select
+            required
+            className={input}
+            name="department_id"
+            value={form.department_id}
+            onChange={update}
+          >
+            <option value="">Select destination department</option>
+            {departments.map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
         </Field>
-        <Field label="Department">
-          <Select
-            name="department"
-            value={form.department}
-            values={departments}
-            update={update}
-          />
-        </Field>
-        <Field label="Reason">
+        <Field label="Reason for Transfer">
           <textarea
             required
             className={input}
             name="reason"
             rows="3"
+            placeholder="Why is this transfer needed?"
             value={form.reason}
             onChange={update}
           />
         </Field>
         <p className="rounded-lg bg-[#f7f3f6] p-3 text-xs text-[#4f3448]">
-          Requested → Approved → Automatically re-allocated with updated
-          history.
+          Requested → Approved → Automatically re-allocated to the new department.
         </p>
       </div>
     </Modal>
   );
 }
-function ReturnModal({ form, setForm, current, submit, close }) {
+
+function ReturnModal({ form, setForm, submit, close }) {
   const update = (event) =>
     setForm({ ...form, [event.target.name]: event.target.value });
+    
   return (
     <Modal
-      title="Mark Returned"
-      detail={`${current?.assetTag || ""} · ${current?.holder || ""}`}
+      title="Process Return"
+      detail={`Checking in ${form.asset_tag} from ${form.holder}`}
       submit={submit}
       close={close}
-      action="Complete Return"
+      action="Complete Check-in"
     >
       <div className="space-y-4">
         <Field label="Condition at Check-in">
-          <Select
+          <select
+            required
+            className={input}
             name="condition"
             value={form.condition}
-            values={["Excellent", "Good", "Fair", "Poor", "Damaged"]}
-            update={update}
-          />
+            onChange={update}
+          >
+            <option value="Excellent">Excellent</option>
+            <option value="Good">Good</option>
+            <option value="Fair">Fair</option>
+            <option value="Poor">Poor</option>
+            <option value="Damaged">Damaged</option>
+          </select>
         </Field>
         <Field label="Check-in Notes">
           <textarea
-            required
             className={input}
             name="notes"
             rows="4"
+            placeholder="Any visible damage, missing accessories, etc."
             value={form.notes}
             onChange={update}
           />
         </Field>
         <p className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-700">
-          Asset status will revert to Available.
+          The asset's status will automatically revert to "Available" for future allocations.
         </p>
       </div>
     </Modal>
   );
 }
+
 function Field({ label, children }) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
       {children}
     </label>
-  );
-}
-function Select({ name, value, values, update }) {
-  return (
-    <select
-      required
-      className={input}
-      name={name}
-      value={value}
-      onChange={update}
-    >
-      <option value="">Select option</option>
-      {values.map((item) => (
-        <option key={item}>{item}</option>
-      ))}
-    </select>
   );
 }

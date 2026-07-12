@@ -15,6 +15,9 @@ export const API_ENDPOINTS = {
     GET_ALL: `${BASE_URL}/assets`,
     GET_BY_ID: (id) => `${BASE_URL}/assets/${id}`,
     CREATE: `${BASE_URL}/assets`,
+    BASE: `${BASE_URL}/assets`,
+    METADATA: `${BASE_URL}/assets/metadata`,
+    IMPORT: `${BASE_URL}/assets/import`
   },
   USERS: {
     GET_ALL: `${BASE_URL}/users`,
@@ -35,9 +38,35 @@ export const API_ENDPOINTS = {
     BRANDING: `${BASE_URL}/organization/branding`,
     NOTIFICATIONS: `${BASE_URL}/organization/notifications`,
   },
-  ASSETS: {
-    BASE: `${BASE_URL}/assets`,
-    METADATA: `${BASE_URL}/assets/metadata`,
-    IMPORT: `${BASE_URL}/assets/import`
+
+  ALLOCATIONS: {
+    BASE: `${BASE_URL}/allocations`,
+    ALLOCATE: `${BASE_URL}/allocations/allocate`,
+    RETURN: `${BASE_URL}/allocations/return`,
+    RETURNS_HISTORY: `${BASE_URL}/allocations/returns`,
+    TRANSFERS: `${BASE_URL}/allocations/transfers`,
+    REQUEST_TRANSFER: `${BASE_URL}/allocations/transfers/request`,
+    APPROVE_TRANSFER: (id) => `${BASE_URL}/allocations/transfers/${id}/approve`,
+  },
+  BOOKINGS: {
+    BASE: `${BASE_URL}/bookings`,
+    RESOURCES: `${BASE_URL}/bookings/resources`,
+    CANCEL: (id) => `${BASE_URL}/bookings/${id}/cancel`,
+    UPDATE: (id) => `${BASE_URL}/bookings/${id}`,
+  },
+  MAINTENANCE: {
+    REQUESTS: `${BASE_URL}/maintenance/requests`,
+    ENGINEERS: `${BASE_URL}/maintenance/engineers`,
+    APPROVE: (id) => `${BASE_URL}/maintenance/requests/${id}/approve`,
+    REJECT: (id) => `${BASE_URL}/maintenance/requests/${id}/reject`,
+    ASSIGN: (id) => `${BASE_URL}/maintenance/requests/${id}/assign`,
+    START: (id) => `${BASE_URL}/maintenance/requests/${id}/start`,
+    RESOLVE: (id) => `${BASE_URL}/maintenance/requests/${id}/resolve`,
+  },
+  AUDITS: {
+    BASE: `${BASE_URL}/audits`,
+    AUDITORS: `${BASE_URL}/audits/auditors`,
+    VERIFY: (id) => `${BASE_URL}/audits/${id}/verify`,
+    CLOSE: (id) => `${BASE_URL}/audits/${id}/close`,
   }
 };

@@ -11,128 +11,8 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import { API_ENDPOINTS } from "../../config/apis";
 
-const fallbackAssets = [
-  {
-    tag: "AF-0001",
-    name: "Dell Latitude 5440",
-    status: "Allocated",
-    maintenanceHistory: [],
-  },
-  {
-    tag: "AF-0002",
-    name: "Epson EB-X49 Projector",
-    status: "Available",
-    maintenanceHistory: [],
-  },
-  {
-    tag: "AF-0003",
-    name: "Honda City",
-    status: "Reserved",
-    maintenanceHistory: [],
-  },
-  {
-    tag: "AF-0004",
-    name: "HP EliteBook 840",
-    status: "Under Maintenance",
-    maintenanceHistory: [],
-  },
-];
-const initialRequests = [
-  {
-    id: "MR-0102",
-    assetTag: "AF-0004",
-    assetName: "HP EliteBook 840",
-    issue:
-      "Battery drains within 30 minutes and device shuts down unexpectedly.",
-    priority: "High",
-    photo: "battery-issue.jpg",
-    raisedBy: "Neha Kapoor",
-    raisedOn: "10 Jul 2026",
-    status: "In Progress",
-    technician: "Vikram Singh",
-    resolution: "",
-    history: [
-      {
-        event: "Request raised",
-        date: "10 Jul 2026",
-        detail: "Priority: High",
-      },
-      {
-        event: "Approved by Asset Manager",
-        date: "10 Jul 2026",
-        detail: "Asset moved to Under Maintenance",
-      },
-      {
-        event: "Technician assigned",
-        date: "11 Jul 2026",
-        detail: "Vikram Singh",
-      },
-      {
-        event: "Work started",
-        date: "11 Jul 2026",
-        detail: "Battery diagnostics underway",
-      },
-    ],
-  },
-  {
-    id: "MR-0103",
-    assetTag: "AF-0002",
-    assetName: "Epson EB-X49 Projector",
-    issue: "Image flickers after approximately twenty minutes of use.",
-    priority: "Medium",
-    photo: "",
-    raisedBy: "Aman Gupta",
-    raisedOn: "12 Jul 2026",
-    status: "Pending",
-    technician: "",
-    resolution: "",
-    history: [
-      {
-        event: "Request raised",
-        date: "12 Jul 2026",
-        detail: "Priority: Medium",
-      },
-    ],
-  },
-  {
-    id: "MR-0098",
-    assetTag: "AF-0001",
-    assetName: "Dell Latitude 5440",
-    issue: "Keyboard replacement required.",
-    priority: "Low",
-    photo: "keyboard.jpg",
-    raisedBy: "Priya Sharma",
-    raisedOn: "02 Jul 2026",
-    status: "Resolved",
-    technician: "Sanjay Kumar",
-    resolution: "Keyboard replaced and device tested successfully.",
-    history: [
-      { event: "Request raised", date: "02 Jul 2026", detail: "Priority: Low" },
-      {
-        event: "Approved by Asset Manager",
-        date: "02 Jul 2026",
-        detail: "Asset moved to Under Maintenance",
-      },
-      {
-        event: "Technician assigned",
-        date: "03 Jul 2026",
-        detail: "Sanjay Kumar",
-      },
-      {
-        event: "Resolved",
-        date: "05 Jul 2026",
-        detail: "Keyboard replaced and tested",
-      },
-    ],
-  },
-];
-const technicians = [
-  "Vikram Singh",
-  "Sanjay Kumar",
-  "Meera Joshi",
-  "Rohit Das",
-];
 const statuses = [
   "All",
   "Pending",
@@ -142,42 +22,61 @@ const statuses = [
   "In Progress",
   "Resolved",
 ];
-const today = new Date().toLocaleDateString("en-IN", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
-const read = (key, fallback) => {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || fallback;
-  } catch {
-    return fallback;
-  }
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 };
 
 export default function Maintenance() {
-  const [assets, setAssets] = useState(() =>
-    read("assetflow_assets", fallbackAssets),
-  );
-  const [requests, setRequests] = useState(() =>
-    read("assetflow_maintenance_requests", initialRequests),
-  );
+  const [requests, setRequests] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
+  
   const [raiseForm, setRaiseForm] = useState(null);
   const [assigning, setAssigning] = useState(null);
   const [resolving, setResolving] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  const token = localStorage.getItem("assetflow_token");
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [reqRes, techRes, assetsRes] = await Promise.all([
+        fetch(API_ENDPOINTS.MAINTENANCE.REQUESTS, { headers }),
+        fetch(API_ENDPOINTS.MAINTENANCE.ENGINEERS, { headers }),
+        fetch(API_ENDPOINTS.ASSETS.GET_ALL, { headers })
+      ]);
+      const [rData, tData, aData] = await Promise.all([
+        reqRes.json(), techRes.json(), assetsRes.json()
+      ]);
+      
+      if (rData.success) setRequests(rData.data);
+      if (tData.success) setTechnicians(tData.data);
+      if (aData.success) setAssets(aData.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem(
-      "assetflow_maintenance_requests",
-      JSON.stringify(requests),
-    );
-  }, [requests]);
-  useEffect(() => {
-    localStorage.setItem("assetflow_assets", JSON.stringify(assets));
-  }, [assets]);
+    fetchData();
+  }, []);
 
   const visible = useMemo(
     () =>
@@ -185,127 +84,87 @@ export default function Maintenance() {
         (item) =>
           (filter === "All" || item.status === filter) &&
           [
-            item.id,
-            item.assetTag,
-            item.assetName,
-            item.issue,
-            item.raisedBy,
-            item.technician,
-          ].some((value) => value.toLowerCase().includes(search.toLowerCase())),
+            item.request_id,
+            item.asset_tag,
+            item.asset_name,
+            item.issue_description,
+            item.raised_by_name,
+            item.technician_name,
+          ].some((value) => value && value.toLowerCase().includes(search.toLowerCase())),
       ),
     [requests, filter, search],
   );
-  const updateAsset = (assetTag, status, event, detail) =>
-    setAssets(
-      assets.map((asset) =>
-        asset.tag === assetTag
-          ? {
-              ...asset,
-              status,
-              maintenanceHistory: [
-                ...(asset.maintenanceHistory || []),
-                { event, date: today, detail },
-              ],
-            }
-          : asset,
-      ),
-    );
-  const addHistory = (id, status, event, detail, extra = {}) =>
-    setRequests(
-      requests.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status,
-              ...extra,
-              history: [...item.history, { event, date: today, detail }],
-            }
-          : item,
-      ),
-    );
 
-  const raise = (event) => {
+  const raise = async (event) => {
     event.preventDefault();
-    const asset = assets.find((item) => item.tag === raiseForm.assetTag);
-    const item = {
-      id: `MR-${String(104 + requests.length).padStart(4, "0")}`,
-      assetTag: asset.tag,
-      assetName: asset.name,
-      issue: raiseForm.issue,
-      priority: raiseForm.priority,
-      photo: raiseForm.photo,
-      raisedBy: raiseForm.raisedBy,
-      raisedOn: today,
-      status: "Pending",
-      technician: "",
-      resolution: "",
-      history: [
-        {
-          event: "Request raised",
-          date: today,
-          detail: `Priority: ${raiseForm.priority}`,
-        },
-      ],
-    };
-    setRequests([item, ...requests]);
-    setRaiseForm(null);
+    try {
+      const res = await fetch(API_ENDPOINTS.MAINTENANCE.REQUESTS, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          asset_id: raiseForm.asset_id,
+          issue_description: raiseForm.issue_description,
+          priority: raiseForm.priority,
+          photo_url: raiseForm.photo_url
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRaiseForm(null);
+        fetchData();
+      } else {
+        alert(data.error || "Failed to raise request");
+      }
+    } catch (err) {
+      alert("Error saving request");
+    }
   };
-  const approve = (item) => {
-    addHistory(
-      item.id,
-      "Approved",
-      "Approved by Asset Manager",
-      "Asset moved to Under Maintenance",
-    );
-    updateAsset(
-      item.assetTag,
-      "Under Maintenance",
-      "Maintenance approved",
-      `${item.id}: ${item.issue}`,
-    );
+
+  const executeAction = async (endpoint, payload = null) => {
+    try {
+      const options = { method: 'PUT', headers };
+      if (payload) options.body = JSON.stringify(payload);
+      
+      const res = await fetch(endpoint, options);
+      const data = await res.json();
+      if (data.success) {
+        fetchData();
+        return true;
+      } else {
+        alert(data.error || "Action failed");
+        return false;
+      }
+    } catch (err) {
+      alert("Network error");
+      return false;
+    }
   };
-  const reject = (item) =>
-    addHistory(
-      item.id,
-      "Rejected",
-      "Rejected by Asset Manager",
-      "Request closed without maintenance",
-    );
-  const assign = (event) => {
+
+  const approve = (id) => executeAction(API_ENDPOINTS.MAINTENANCE.APPROVE(id));
+  const reject = (id) => executeAction(API_ENDPOINTS.MAINTENANCE.REJECT(id));
+  const startWork = (id) => executeAction(API_ENDPOINTS.MAINTENANCE.START(id));
+
+  const assign = async (event) => {
     event.preventDefault();
-    addHistory(
-      assigning.id,
-      "Technician Assigned",
-      "Technician assigned",
-      assigning.technician,
-      { technician: assigning.technician },
-    );
-    setAssigning(null);
+    const tech = technicians.find(t => t.engineer_id === assigning.engineer_id);
+    const success = await executeAction(API_ENDPOINTS.MAINTENANCE.ASSIGN(assigning.id), {
+      engineer_id: assigning.engineer_id,
+      engineer_name: tech?.name
+    });
+    if (success) setAssigning(null);
   };
-  const startWork = (item) =>
-    addHistory(
-      item.id,
-      "In Progress",
-      "Work started",
-      `${item.technician} started maintenance work`,
-    );
-  const resolve = (event) => {
+
+  const resolve = async (event) => {
     event.preventDefault();
-    addHistory(
-      resolving.id,
-      "Resolved",
-      "Request resolved",
-      resolving.resolution,
-      { resolution: resolving.resolution },
-    );
-    updateAsset(
-      resolving.assetTag,
-      "Available",
-      "Maintenance resolved",
-      resolving.resolution,
-    );
-    setResolving(null);
+    const success = await executeAction(API_ENDPOINTS.MAINTENANCE.RESOLVE(resolving.id), {
+      resolution: resolving.resolution
+    });
+    if (success) setResolving(null);
   };
+  
+  if (loading && requests.length === 0) {
+    return <div className="p-10 text-center text-slate-500">Loading maintenance data...</div>;
+  }
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
@@ -324,11 +183,10 @@ export default function Maintenance() {
           className="inline-flex items-center gap-2 rounded-lg bg-[#4f3448] px-4 py-2.5 text-sm font-medium text-white"
           onClick={() =>
             setRaiseForm({
-              assetTag: "",
-              issue: "",
+              asset_id: "",
+              issue_description: "",
               priority: "Medium",
-              photo: "",
-              raisedBy: "",
+              photo_url: "",
             })
           }
         >
@@ -434,26 +292,26 @@ export default function Maintenance() {
             </thead>
             <tbody>
               {visible.map((item) => (
-                <tr key={item.id} className="border-b border-slate-100">
+                <tr key={item.request_id} className="border-b border-slate-100">
                   <td className="px-4 py-4">
-                    <p className="font-semibold text-[#4f3448]">{item.id}</p>
-                    <p className="text-xs text-slate-500">{item.raisedOn}</p>
+                    <p className="font-semibold text-[#4f3448]">{item.request_id.substring(0,8)}...</p>
+                    <p className="text-xs text-slate-500">{formatDate(item.created_at)}</p>
                   </td>
                   <td className="px-4 py-4">
                     <p className="font-medium text-[#31232e]">
-                      {item.assetName}
+                      {item.asset_name}
                     </p>
-                    <p className="text-xs text-slate-500">{item.assetTag}</p>
+                    <p className="text-xs text-slate-500">{item.asset_tag}</p>
                   </td>
                   <td className="max-w-72 px-4 py-4 text-slate-600">
-                    {item.issue}
+                    {item.issue_description}
                   </td>
                   <td className="px-4 py-4">
                     <Priority value={item.priority} />
                   </td>
-                  <td className="px-4 py-4 text-slate-600">{item.raisedBy}</td>
+                  <td className="px-4 py-4 text-slate-600">{item.raised_by_name}</td>
                   <td className="px-4 py-4 text-slate-600">
-                    {item.technician || "Not assigned"}
+                    {item.technician_name || "Not assigned"}
                   </td>
                   <td className="px-4 py-4">
                     <Status value={item.status} />
@@ -471,13 +329,13 @@ export default function Maintenance() {
                         <>
                           <button
                             className="font-medium text-emerald-700 hover:underline"
-                            onClick={() => approve(item)}
+                            onClick={() => approve(item.request_id)}
                           >
                             Approve
                           </button>
                           <button
                             className="font-medium text-red-700 hover:underline"
-                            onClick={() => reject(item)}
+                            onClick={() => reject(item.request_id)}
                           >
                             Reject
                           </button>
@@ -487,7 +345,7 @@ export default function Maintenance() {
                         <button
                           className="font-medium text-[#4f3448] hover:underline"
                           onClick={() =>
-                            setAssigning({ id: item.id, technician: "" })
+                            setAssigning({ id: item.request_id, engineer_id: "" })
                           }
                         >
                           Assign Technician
@@ -496,7 +354,7 @@ export default function Maintenance() {
                       {item.status === "Technician Assigned" && (
                         <button
                           className="font-medium text-[#4f3448] hover:underline"
-                          onClick={() => startWork(item)}
+                          onClick={() => startWork(item.request_id)}
                         >
                           Start Work
                         </button>
@@ -506,8 +364,7 @@ export default function Maintenance() {
                           className="font-medium text-emerald-700 hover:underline"
                           onClick={() =>
                             setResolving({
-                              id: item.id,
-                              assetTag: item.assetTag,
+                              id: item.request_id,
                               resolution: "",
                             })
                           }
@@ -519,10 +376,18 @@ export default function Maintenance() {
                   </td>
                 </tr>
               ))}
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan="8" className="p-8 text-center text-slate-500">
+                    No maintenance requests found.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </section>
+      
       {raiseForm && (
         <RaiseModal
           form={raiseForm}
@@ -543,14 +408,14 @@ export default function Maintenance() {
             <select
               required
               className={input}
-              value={assigning.technician}
+              value={assigning.engineer_id}
               onChange={(event) =>
-                setAssigning({ ...assigning, technician: event.target.value })
+                setAssigning({ ...assigning, engineer_id: event.target.value })
               }
             >
               <option value="">Select technician</option>
               {technicians.map((item) => (
-                <option key={item}>{item}</option>
+                <option key={item.engineer_id} value={item.engineer_id}>{item.name}</option>
               ))}
             </select>
           </Field>
@@ -576,14 +441,13 @@ export default function Maintenance() {
             />
           </Field>
           <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-700">
-            Resolving this request will change the asset status to Available.
+            Resolving this request will automatically change the asset's overall status back to Available.
           </p>
         </SimpleModal>
       )}
       {selected && (
         <HistoryPanel
           request={selected}
-          asset={assets.find((item) => item.tag === selected.assetTag)}
           close={() => setSelected(null)}
         />
       )}
@@ -593,6 +457,7 @@ export default function Maintenance() {
 
 const input =
   "mt-2 w-full rounded-lg border border-[#ddd3da] px-3 py-2.5 outline-none focus:border-[#4f3448]";
+
 function RaiseModal({ form, setForm, assets, submit, close }) {
   const update = (event) => {
     const { name, value, files } = event.target;
@@ -610,14 +475,14 @@ function RaiseModal({ form, setForm, assets, submit, close }) {
           <select
             required
             className={input}
-            name="assetTag"
-            value={form.assetTag}
+            name="asset_id"
+            value={form.asset_id}
             onChange={update}
           >
             <option value="">Select asset</option>
             {assets.map((item) => (
-              <option key={item.tag} value={item.tag}>
-                {item.tag} · {item.name} · {item.status}
+              <option key={item.id} value={item.id}>
+                {item.asset_tag} · {item.name} · {item.status}
               </option>
             ))}
           </select>
@@ -626,9 +491,9 @@ function RaiseModal({ form, setForm, assets, submit, close }) {
           <textarea
             required
             className={input}
-            name="issue"
+            name="issue_description"
             rows="4"
-            value={form.issue}
+            value={form.issue_description}
             onChange={update}
           />
         </Field>
@@ -645,23 +510,14 @@ function RaiseModal({ form, setForm, assets, submit, close }) {
               ))}
             </select>
           </Field>
-          <Field label="Raised By">
-            <input
-              required
-              className={input}
-              name="raisedBy"
-              value={form.raisedBy}
-              onChange={update}
-            />
-          </Field>
         </div>
         <Field label="Issue Photo (optional)">
           <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#cdbfc9] p-3 text-sm text-slate-500">
             <Camera size={17} />
-            {form.photo || "Attach photo"}
+            {form.photo_url || "Attach photo"}
             <input
               hidden
-              name="photo"
+              name="photo_url"
               type="file"
               accept="image/*"
               onChange={update}
@@ -676,9 +532,10 @@ function RaiseModal({ form, setForm, assets, submit, close }) {
     </SimpleModal>
   );
 }
+
 function SimpleModal({ title, action, submit, close, children }) {
   return (
-    <div className="fixed inset-0 z-20 grid place-items-center bg-black/35 p-6">
+    <div className="fixed inset-0 z-20 grid place-items-center bg-black/35 p-6 backdrop-blur-sm">
       <form
         className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl"
         onSubmit={submit}
@@ -690,7 +547,7 @@ function SimpleModal({ title, action, submit, close, children }) {
           </button>
         </div>
         {children}
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-slate-100">
           <button
             className="rounded-lg border px-4 py-2.5"
             type="button"
@@ -709,18 +566,21 @@ function SimpleModal({ title, action, submit, close, children }) {
     </div>
   );
 }
-function HistoryPanel({ request, asset, close }) {
+
+function HistoryPanel({ request, close }) {
+  const history = request.history || [];
+  
   return (
-    <div className="fixed inset-0 z-20 flex justify-end bg-black/25">
+    <div className="fixed inset-0 z-20 flex justify-end bg-black/25 backdrop-blur-sm">
       <div className="h-full w-[520px] overflow-y-auto bg-white p-6 shadow-xl">
         <div className="flex justify-between">
           <div>
-            <p className="font-semibold text-[#4f3448]">{request.id}</p>
+            <p className="font-semibold text-[#4f3448]">{request.request_id.substring(0,8)}...</p>
             <h2 className="mt-1 text-xl font-semibold text-[#31232e]">
-              {request.assetName}
+              {request.asset_name}
             </h2>
             <p className="text-sm text-slate-500">
-              Asset status: {asset?.status || "Unknown"}
+              Asset status: {request.asset_status || "Unknown"}
             </p>
           </div>
           <button onClick={close}>
@@ -728,24 +588,24 @@ function HistoryPanel({ request, asset, close }) {
           </button>
         </div>
         <div className="mt-6 rounded-lg bg-[#f8f5f7] p-4">
-          <p className="text-sm font-medium text-[#31232e]">{request.issue}</p>
+          <p className="text-sm font-medium text-[#31232e]">{request.issue_description}</p>
           <p className="mt-2 text-xs text-slate-500">
             Priority: {request.priority} · Technician:{" "}
-            {request.technician || "Not assigned"}
+            {request.technician_name || "Not assigned"}
           </p>
         </div>
         <h3 className="mt-6 font-semibold text-[#31232e]">
           Maintenance History
         </h3>
         <div className="mt-4 space-y-4">
-          {request.history.map((item, index) => (
+          {history.length === 0 && <p className="text-sm text-slate-500">No history available.</p>}
+          {history.map((item, index) => (
             <div
-              key={`${item.event}-${index}`}
+              key={`${item.id}-${index}`}
               className="border-l-2 border-[#d9ccd5] pb-4 pl-4"
             >
               <p className="font-medium text-[#31232e]">{item.event}</p>
-              <p className="text-xs text-slate-500">{item.date}</p>
-              <p className="mt-1 text-sm text-slate-600">{item.detail}</p>
+              <p className="text-xs text-slate-500">{formatDate(item.date)}</p>
             </div>
           ))}
         </div>
@@ -753,6 +613,7 @@ function HistoryPanel({ request, asset, close }) {
     </div>
   );
 }
+
 function Field({ label, children }) {
   return (
     <label className="block text-sm font-medium text-slate-700">
@@ -761,6 +622,7 @@ function Field({ label, children }) {
     </label>
   );
 }
+
 function Priority({ value }) {
   const style = {
     Low: "bg-slate-100 text-slate-600",
@@ -776,6 +638,7 @@ function Priority({ value }) {
     </span>
   );
 }
+
 function Status({ value }) {
   const style = {
     Pending: "bg-amber-50 text-amber-700",

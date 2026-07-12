@@ -19,12 +19,20 @@ app.get('/api/health', (req, res) => {
 });
 
 const assetRoutes = require('./modules/assets/assetRoutes');
+const allocationRoutes = require('./modules/allocations/allocationRoutes');
+const bookingRoutes = require('./modules/bookings/bookingRoutes');
+const maintenanceRoutes = require('./modules/maintenance/maintenanceRoutes');
+const auditRoutes = require('./modules/audits/auditRoutes');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/organization', organizationRoutes);
 app.use('/api/assets', assetRoutes);
+app.use('/api/allocations', allocationRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/maintenance', maintenanceRoutes);
+app.use('/api/audits', auditRoutes);
 
 
 app.listen(port, () => {

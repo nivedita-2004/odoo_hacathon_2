@@ -28,10 +28,15 @@ const sendOTP = async (email, otp) => {
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error(`Failed to send OTP email to ${email}. If in development, your OTP is: ${otp}`);
+    console.error(error.message);
+  }
 };
 const sendWelcomeEmail = async (email, name) => {
-  const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const loginUrl = process.env.FRONTEND_URL;
   const mailOptions = {
     from: `"AssetFlow AI" <${process.env.SMTP_USER}>`,
     to: email,
@@ -59,7 +64,12 @@ const sendWelcomeEmail = async (email, name) => {
       </div>
     `,
   };
-  await transporter.sendMail(mailOptions);
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error(`Failed to send welcome email to ${email}.`);
+    console.error(error.message);
+  }
 };
 
 module.exports = { sendOTP, sendWelcomeEmail };
