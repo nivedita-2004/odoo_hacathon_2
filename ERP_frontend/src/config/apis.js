@@ -25,6 +25,7 @@ export const API_ENDPOINTS = {
   },
   DASHBOARD: {
     ADMIN: `${BASE_URL}/dashboard/admin`,
+    NOTIFICATIONS: `${BASE_URL}/dashboard/notifications`,
   },
   ORGANIZATION: {
     SETUP: `${BASE_URL}/organization/setup`,

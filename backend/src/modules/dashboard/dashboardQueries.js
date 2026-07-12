@@ -79,6 +79,127 @@ const getOverdue = `
   WHERE al.expected_return_date < CURRENT_TIMESTAMP AND al.actual_return_date IS NULL AND al.organization_id = $1;
 `;
 
+const getNotificationsAllocations = `
+  SELECT
+    al.id,
+    al.allocated_date AS time,
+    a.name AS asset_name,
+    a.asset_tag,
+    COALESCE(e.first_name || ' ' || e.last_name, '') AS employee_name,
+    d.name AS department
+  FROM asset_allocations al
+  JOIN assets a ON al.asset_id = a.id
+  LEFT JOIN employees e ON al.employee_id = e.id
+  LEFT JOIN departments d ON al.department_id = d.id
+  WHERE al.organization_id = $1
+    AND al.actual_return_date IS NULL
+  ORDER BY al.allocated_date DESC
+  LIMIT 20;
+`;
+
+const getNotificationsTransfers = `
+  SELECT
+    t.id,
+    COALESCE(t.transfer_date, t.created_at) AS time,
+    t.status,
+    t.reason,
+    a.name AS asset_name,
+    a.asset_tag,
+    sd.name AS from_department,
+    dd.name AS to_department,
+    COALESCE(e.first_name || ' ' || e.last_name, u.email, 'Unknown') AS requested_by
+  FROM asset_transfers t
+  JOIN assets a ON t.asset_id = a.id
+  LEFT JOIN users u ON t.requested_by = u.id
+  LEFT JOIN employees e ON u.employee_id = e.id
+  LEFT JOIN departments sd ON t.source_department_id = sd.id
+  LEFT JOIN departments dd ON t.destination_department_id = dd.id
+  WHERE t.organization_id = $1
+  ORDER BY COALESCE(t.transfer_date, t.created_at) DESC
+  LIMIT 20;
+`;
+
+const getNotificationsReturns = `
+  SELECT
+    al.id,
+    al.actual_return_date AS time,
+    a.name AS asset_name,
+    a.asset_tag,
+    COALESCE(e.first_name || ' ' || e.last_name, u.email, 'Unknown') AS returned_by,
+    d.name AS department
+  FROM asset_allocations al
+  JOIN assets a ON al.asset_id = a.id
+  LEFT JOIN users u ON al.returned_by = u.id
+  LEFT JOIN employees e ON u.employee_id = e.id
+  LEFT JOIN departments d ON al.department_id = d.id
+  WHERE al.organization_id = $1 AND al.actual_return_date IS NOT NULL
+  ORDER BY al.actual_return_date DESC
+  LIMIT 20;
+`;
+
+const getNotificationsMaintenance = `
+  SELECT
+    mr.id,
+    mr.status,
+    mr.priority,
+    mr.issue_description,
+    mr.created_at AS time,
+    a.name AS asset_name,
+    a.asset_tag,
+    COALESCE(e.first_name || ' ' || e.last_name, u.email, 'Unknown') AS raised_by,
+    d.name AS department
+  FROM maintenance_requests mr
+  JOIN assets a ON mr.asset_id = a.id
+  LEFT JOIN users u ON mr.requested_by = u.id
+  LEFT JOIN employees e ON u.employee_id = e.id
+  LEFT JOIN departments d ON e.department_id = d.id
+  WHERE mr.organization_id = $1
+  ORDER BY mr.created_at DESC
+  LIMIT 20;
+`;
+
+const getNotificationsBookings = `
+  SELECT
+    b.id,
+    b.title,
+    b.status,
+    b.start_time AS start_time,
+    b.end_time AS end_time,
+    a.name AS resource_name,
+    COALESCE(e.first_name || ' ' || e.last_name, u.email, 'Unknown') AS booked_by,
+    d.name AS department
+  FROM bookings b
+  JOIN booking_resources br ON b.resource_id = br.id
+  JOIN assets a ON br.asset_id = a.id
+  LEFT JOIN users u ON b.booked_by = u.id
+  LEFT JOIN employees e ON u.employee_id = e.id
+  LEFT JOIN departments d ON e.department_id = d.id
+  WHERE b.organization_id = $1
+  ORDER BY b.start_time DESC
+  LIMIT 20;
+`;
+
+const getNotificationsAudits = `
+  SELECT
+    aa.id,
+    s.name AS audit_name,
+    a.name AS asset_name,
+    a.asset_tag,
+    CASE WHEN aa.status = 'MISSING' THEN 'Missing' WHEN aa.status = 'DAMAGED' THEN 'Damaged' ELSE 'Verified' END AS result,
+    COALESCE(e.first_name || ' ' || e.last_name, u.email, 'Unknown') AS checked_by,
+    COALESCE(aa.updated_at, aa.created_at, s.created_at) AS time,
+    s.id AS audit_id
+  FROM audit_assets aa
+  JOIN audit_schedules s ON aa.audit_id = s.id
+  JOIN assets a ON aa.asset_id = a.id
+  LEFT JOIN users u ON aa.scanned_by = u.id
+  LEFT JOIN employees e ON u.employee_id = e.id
+  WHERE s.organization_id = $1
+    AND aa.status IN ('MISSING', 'DAMAGED')
+  ORDER BY time DESC
+  LIMIT 20;
+`;
+
 const getEmployees = `
   SELECT id, status FROM employees WHERE organization_id = $1;
 `;
@@ -105,6 +226,12 @@ module.exports = {
   getMaintenance,
   getAudits,
   getOverdue,
+  getNotificationsAllocations,
+  getNotificationsTransfers,
+  getNotificationsReturns,
+  getNotificationsMaintenance,
+  getNotificationsBookings,
+  getNotificationsAudits,
   getEmployees,
   getActivityLogs
 };
