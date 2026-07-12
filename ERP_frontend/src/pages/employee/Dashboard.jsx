@@ -13,10 +13,9 @@ export default function Dashboard() {
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fallbacks for un-bound modules
-  const bookings = [];
-  const maintenance = [];
-  const returns = [];
+  const [bookings, setBookings] = useState([]);
+  const [maintenance, setMaintenance] = useState([]);
+  const [returns, setReturns] = useState([]);
 
   useEffect(() => {
     const token = localStorage.getItem('assetflow_token');
@@ -25,16 +24,22 @@ export default function Dashboard() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [allocRes, assetRes, transferRes] = await Promise.all([
+        const [allocRes, assetRes, transferRes, bookRes, maintRes, retRes] = await Promise.all([
           fetch(API_ENDPOINTS.ALLOCATIONS.BASE, { headers }),
           fetch(API_ENDPOINTS.ASSETS.GET_ALL, { headers }),
-          fetch(API_ENDPOINTS.ALLOCATIONS.TRANSFERS, { headers })
+          fetch(API_ENDPOINTS.ALLOCATIONS.TRANSFERS, { headers }),
+          fetch(API_ENDPOINTS.BOOKINGS.BASE, { headers }),
+          fetch(API_ENDPOINTS.MAINTENANCE.REQUESTS, { headers }),
+          fetch(API_ENDPOINTS.ALLOCATIONS.RETURNS_HISTORY, { headers })
         ]);
 
-        const [allocJson, assetJson, transferJson] = await Promise.all([
+        const [allocJson, assetJson, transferJson, bookJson, maintJson, retJson] = await Promise.all([
           allocRes.json(),
           assetRes.json(),
-          transferRes.json()
+          transferRes.json(),
+          bookRes.json(),
+          maintRes.json(),
+          retRes.json()
         ]);
 
         if (allocJson.success) {
@@ -45,7 +50,26 @@ export default function Dashboard() {
         }
         if (transferJson.success) {
           setTransfers(transferJson.data.filter(t => t.from_department === user.department)); 
-          // We filter by from_department because transfers don't track requesting employee currently
+        }
+        if (bookJson.success) {
+          setBookings(bookJson.data.filter(b => 
+            b.booked_by_user_id === user.id || 
+            b.booked_by_name === identity || 
+            b.booked_by_name === user.fullName
+          ));
+        }
+        if (maintJson.success) {
+          setMaintenance(maintJson.data.filter(m => 
+            m.raised_by_name === identity || 
+            m.raised_by_name === user.fullName || 
+            m.raised_by_name === user.email
+          ));
+        }
+        if (retJson.success) {
+          setReturns(retJson.data.filter(r => {
+            const returnName = `${r.first_name || ''} ${r.last_name || ''}`.trim();
+            return returnName === identity || returnName === user.fullName;
+          }));
         }
       } catch (err) {
         console.error("Failed to load employee dashboard", err);

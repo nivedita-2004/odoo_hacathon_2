@@ -251,7 +251,18 @@ const savePermission = async (req, res) => {
   }
 };
 
+const getEmployees = async (req, res) => {
+  try {
+    const orgId = req.user.organization_id;
+    const employees = await db.query(queries.getEmployees, [orgId]);
+    res.status(200).json({ success: true, data: employees.rows });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
+
 module.exports = { 
-  getSetup, saveBranch, saveDepartment, saveCategory, saveEmployee,
+  getSetup, getEmployees, saveBranch, saveDepartment, saveCategory, saveEmployee,
   getSaaSSetup, saveRole, saveBranding, saveNotification, savePermission
 };

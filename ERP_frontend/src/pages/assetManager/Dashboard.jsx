@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   ArrowRightLeft,
   BarChart3,
@@ -12,33 +13,47 @@ import {
   Wrench,
 } from "lucide-react";
 import RoleDashboard from "../../components/dashboard/RoleDashboard";
-
-const read = (key) => {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || [];
-  } catch {
-    return [];
-  }
-};
+import { API_ENDPOINTS } from "../../config/apis";
 
 export default function Dashboard() {
-  const assets = read("assetflow_assets");
-  const allocations = read("assetflow_allocations");
-  const transfers = read("assetflow_transfers");
-  const returns = read("assetflow_returns");
-  const bookings = read("assetflow_bookings");
-  const maintenance = read("assetflow_maintenance_requests");
-  const audits = read("assetflow_audit_cycles");
-  const overdue = read("assetflow_overdue_allocations");
-  const activeAllocations = allocations.filter(
-    (item) => item.status === "Active",
-  );
-  const countStatus = (status) =>
-    assets.filter((item) => item.status === status).length;
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const token = localStorage.getItem("assetflow_token");
+        const res = await fetch(API_ENDPOINTS.DASHBOARD.ADMIN, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        const result = await res.json();
+        if (result.success) setData(result.data);
+        else setError(result.error || "Failed to load dashboard data");
+      } catch (err) {
+        setError("Failed to fetch dashboard data");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboard();
+  }, []);
+
+  if (loading) return <div className="flex min-h-[60vh] items-center justify-center text-sm font-medium text-slate-500">Loading dashboard...</div>;
+  if (error) return <div className="flex min-h-[60vh] items-center justify-center text-sm font-medium text-red-500">{error}</div>;
+
+  const { assets = [], allocations = [], transfers = [], bookingsData = [], maintenanceRequests = [], auditCycles = [], overdueData = [], returnsData = [], activities = [] } = data || {};
+
+  const maintenance = maintenanceRequests;
+  const bookings = bookingsData;
+  const overdue = overdueData;
+  const audits = auditCycles;
+  
+  const activeAllocations = allocations.filter((item) => item.status === "Active");
+  const countStatus = (status) => assets.filter((item) => item.status === status).length;
   const total = Math.max(1, assets.length);
-  const percent = (value) =>
-    Math.max(value ? 8 : 0, Math.round((value / total) * 100));
-  const recentAssets = [...assets].reverse().slice(0, 5);
+  const percent = (value) => Math.max(value ? 8 : 0, Math.round((value / total) * 100));
+  const recentAssets = [...assets].slice(0, 5);
   const today = new Date().toISOString().slice(0, 10);
   const openAudits = audits.filter((item) => item.status !== "Closed");
 
@@ -119,26 +134,22 @@ export default function Dashboard() {
           },
           {
             label: "Approved Transfers",
-            value: transfers.filter((item) => item.status === "Approved")
-              .length,
+            value: transfers.filter((item) => item.status === "Approved").length,
             Icon: ArrowRightLeft,
           },
           {
             label: "Returns Processed",
-            value: returns.length,
+            value: returnsData.length,
             Icon: RotateCcw,
           },
           {
             label: "Maintenance Resolved",
-            value: maintenance.filter((item) => item.status === "Resolved")
-              .length,
+            value: maintenance.filter((item) => item.status === "Resolved").length,
             Icon: Wrench,
           },
           {
             label: "Bookings Today",
-            value: bookings.filter(
-              (item) => item.date === today && item.status !== "Cancelled",
-            ).length,
+            value: bookings.filter((item) => new Date(item.date).toISOString().slice(0, 10) === today && item.status !== "Cancelled").length,
             Icon: CalendarCheck,
           },
         ],
@@ -169,15 +180,8 @@ export default function Dashboard() {
           },
           {
             label: "Lost / Retired / Disposed",
-            value:
-              countStatus("Lost") +
-              countStatus("Retired") +
-              countStatus("Disposed"),
-            percent: percent(
-              countStatus("Lost") +
-                countStatus("Retired") +
-                countStatus("Disposed"),
-            ),
+            value: countStatus("Lost") + countStatus("Retired") + countStatus("Disposed"),
+            percent: percent(countStatus("Lost") + countStatus("Retired") + countStatus("Disposed")),
           },
         ],
       }}
@@ -193,8 +197,7 @@ export default function Dashboard() {
           },
           {
             label: "Transfer Requests",
-            value: transfers.filter((item) => item.status === "Requested")
-              .length,
+            value: transfers.filter((item) => item.status === "Requested").length,
             Icon: ArrowRightLeft,
             path: "/asset-manager/allocations-transfers",
           },
@@ -206,15 +209,13 @@ export default function Dashboard() {
           },
           {
             label: "Maintenance Pending",
-            value: maintenance.filter((item) => item.status === "Pending")
-              .length,
+            value: maintenance.filter((item) => item.status === "Pending").length,
             Icon: Wrench,
             path: "/asset-manager/maintenance",
           },
           {
             label: "Upcoming Bookings",
-            value: bookings.filter((item) => item.status !== "Cancelled")
-              .length,
+            value: bookings.filter((item) => item.status !== "Cancelled").length,
             Icon: CalendarCheck,
             path: "/asset-manager/bookings",
           },
@@ -228,8 +229,7 @@ export default function Dashboard() {
       }}
       table={{
         title: "Recently Registered Assets",
-        description:
-          "Latest records from the shared Admin and Asset Manager directory.",
+        description: "Latest records from the shared Admin and Asset Manager directory.",
         path: "/asset-manager/assets",
         headers: [
           "Asset Tag",
@@ -238,47 +238,21 @@ export default function Dashboard() {
           "Location",
           "Status",
           "Acquisition Date",
-          "Action",
         ],
         rows: recentAssets.map((item) => [
-          item.tag,
+          item.asset_tag,
           item.name,
-          item.category || "Uncategorized",
-          item.location || "Not set",
+          item.category_name || "Uncategorized",
+          item.department_name || "Not set",
           item.status,
-          item.acquisitionDate || "Not set",
+          item.purchase_date ? new Date(item.purchase_date).toLocaleDateString() : "Not set",
         ]),
       }}
-      activity={[
-        ...transfers
-          .slice(-1)
-          .map((item) => ({
-            text: `Transfer ${item.id} is ${item.status}`,
-            time: item.requestedOn || "Recently",
-            Icon: ArrowRightLeft,
-          })),
-        ...maintenance
-          .slice(-1)
-          .map((item) => ({
-            text: `Maintenance ${item.id} is ${item.status}`,
-            time: item.raisedOn || "Recently",
-            Icon: Wrench,
-          })),
-        ...bookings
-          .slice(-1)
-          .map((item) => ({
-            text: `${item.resource} booking ${item.status || "confirmed"}`,
-            time: item.date || "Recently",
-            Icon: CalendarCheck,
-          })),
-        ...audits
-          .slice(-1)
-          .map((item) => ({
-            text: `${item.name} audit is ${item.status}`,
-            time: item.createdOn || "Recently",
-            Icon: ClipboardCheck,
-          })),
-      ].slice(0, 4)}
+      activity={activities.slice(0, 4).map((item) => ({
+        text: item.description,
+        time: new Date(item.created_at).toLocaleString(),
+        Icon: ArrowRightLeft,
+      }))}
       quickActions={[
         {
           label: "Register or Find Asset",

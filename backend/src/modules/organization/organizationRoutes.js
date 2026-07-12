@@ -10,6 +10,7 @@ router.get('/setup', controller.getSetup);
 router.post('/branches', controller.saveBranch);
 router.post('/departments', controller.saveDepartment);
 router.post('/categories', controller.saveCategory);
+router.get('/employees', controller.getEmployees);
 router.post('/employees', controller.saveEmployee);
 
 router.get('/saas-setup', controller.getSaaSSetup);

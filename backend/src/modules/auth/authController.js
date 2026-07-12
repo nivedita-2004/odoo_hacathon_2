@@ -127,7 +127,7 @@ const verifyRegistrationOtp = async (req, res) => {
     res.status(200).json({
       success: true,
       token,
-      user: { id: fullUser.id, email: fullUser.email, fullName: `${fullUser.first_name || ''} ${fullUser.last_name || ''}`.trim(), employeeId: fullUser.employee_id, role: fullUser.role || 'EMPLOYEE' }
+      user: { id: fullUser.id, email: fullUser.email, fullName: `${fullUser.first_name || ''} ${fullUser.last_name || ''}`.trim(), employeeId: fullUser.employee_id, role: fullUser.computed_role }
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -370,7 +370,7 @@ const selectWorkspace = async (req, res) => {
     return res.status(200).json({
       success: true,
       token,
-      user: { id: user.id, email: user.email, fullName: `${user.first_name || ''} ${user.last_name || ''}`.trim(), employeeId: user.employee_id, role: user.role || 'EMPLOYEE' }
+      user: { id: user.id, email: user.email, fullName: `${user.first_name || ''} ${user.last_name || ''}`.trim(), employeeId: user.employee_id, role: user.computed_role }
     });
   } catch (err) {
     return res.status(401).json({ success: false, error: 'Invalid token' });

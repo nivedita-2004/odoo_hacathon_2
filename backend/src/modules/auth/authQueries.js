@@ -1,12 +1,30 @@
 const getUserByEmail = `
-  SELECT u.*, e.first_name, e.last_name, e.department_id 
+  SELECT 
+    u.*, 
+    e.first_name, 
+    e.last_name, 
+    e.department_id,
+    CASE 
+      WHEN e.role = 'ADMIN' THEN 'ADMIN'
+      WHEN EXISTS (SELECT 1 FROM departments d WHERE d.head_employee_id = e.id) THEN 'DEPARTMENT_HEAD'
+      ELSE COALESCE(e.role, 'EMPLOYEE')
+    END as computed_role
   FROM users u
   LEFT JOIN employees e ON u.employee_id = e.id
   WHERE u.email = $1 AND u.deleted_at IS NULL;
 `;
 
 const getUserByEmailAndOrg = `
-  SELECT u.*, e.first_name, e.last_name, e.department_id 
+  SELECT 
+    u.*, 
+    e.first_name, 
+    e.last_name, 
+    e.department_id,
+    CASE 
+      WHEN e.role = 'ADMIN' THEN 'ADMIN'
+      WHEN EXISTS (SELECT 1 FROM departments d WHERE d.head_employee_id = e.id) THEN 'DEPARTMENT_HEAD'
+      ELSE COALESCE(e.role, 'EMPLOYEE')
+    END as computed_role
   FROM users u
   LEFT JOIN employees e ON u.employee_id = e.id
   WHERE u.email = $1 AND u.organization_id = $2 AND u.deleted_at IS NULL;
