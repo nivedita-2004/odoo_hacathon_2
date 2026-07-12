@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getMetadata, getAssets, createAsset, getAssetById, exportAssets, importAssets, getAssetTimeline, getAssetHealth } = require('./assetController');
+const assetController = require('./assetController');
 const authMiddleware = require('../../middleware/authMiddleware');
 const authorizeRoles = require('../../middleware/rbacMiddleware');
 const multer = require('multer');
