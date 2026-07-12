@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -9,35 +9,92 @@ import {
   X,
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
-
-const read = (key) => {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || [];
-  } catch {
-    return [];
-  }
-};
+import { API_ENDPOINTS } from "../../config/apis";
 
 export default function Maintenance() {
   const { user } = useAuth();
   const department = user?.department || "Unassigned";
-  const assets = read("assetflow_assets").filter(
-    (item) => item.department === department,
-  );
-  const assetTags = new Set(assets.map((item) => item.tag));
-  const requests = read("assetflow_maintenance_requests").filter((item) =>
-    assetTags.has(item.assetTag),
-  );
+  const [assets, setAssets] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const [selected, setSelected] = useState(null);
-  const visible = requests.filter(
-    (item) =>
-      (filter === "All" || item.status === filter) &&
-      [item.id, item.assetName, item.issue, item.technician].some((value) =>
-        value.toLowerCase().includes(search.toLowerCase()),
-      ),
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("assetflow_token");
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [assetsRes, requestsRes] = await Promise.all([
+          fetch(API_ENDPOINTS.ASSETS.GET_ALL, { headers }),
+          fetch(API_ENDPOINTS.MAINTENANCE.REQUESTS, { headers }),
+        ]);
+
+        const [assetsJson, requestsJson] = await Promise.all([
+          assetsRes.json(),
+          requestsRes.json(),
+        ]);
+
+        if (!assetsJson.success) throw new Error(assetsJson.error || "Failed to load assets");
+        if (!requestsJson.success) throw new Error(requestsJson.error || "Failed to load maintenance requests");
+
+        setAssets(assetsJson.data);
+        setRequests(
+          requestsJson.data.map((item) => ({
+            id: item.request_id,
+            assetName: item.asset_name,
+            assetTag: item.asset_tag,
+            issue: item.issue_description,
+            priority: item.priority,
+            technician: item.technician_name || "",
+            status: item.status,
+            history: item.history || [],
+            raisedOn: item.created_at,
+          })),
+        );
+      } catch (err) {
+        setError(err.message || "Unable to load maintenance data.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const departmentAssetTags = useMemo(
+    () => new Set(assets.filter((item) => item.department_name === department).map((item) => item.asset_tag)),
+    [assets, department],
   );
+
+  const visibleRequests = useMemo(
+    () =>
+      requests
+        .filter((item) => departmentAssetTags.has(item.assetTag))
+        .filter(
+          (item) =>
+            (filter === "All" || item.status === filter) &&
+            [item.id, item.assetName, item.issue, item.technician]
+              .filter(Boolean)
+              .some((value) =>
+                value.toLowerCase().includes(search.toLowerCase()),
+              ),
+        ),
+    [requests, departmentAssetTags, filter, search],
+  );
+
+  if (loading) {
+    return <div className="p-10 text-center text-slate-500">Loading department maintenance...</div>;
+  }
+
+  if (error) {
+    return <div className="p-10 text-center text-red-500">Error: {error}</div>;
+  }
+
   return (
     <div className="mx-auto max-w-[1500px] space-y-6">
       <div>
@@ -54,19 +111,19 @@ export default function Maintenance() {
         {[
           [
             "Open Cases",
-            requests.filter(
+            visibleRequests.filter(
               (item) => !["Resolved", "Rejected"].includes(item.status),
             ).length,
             Wrench,
           ],
           [
             "Pending Approval",
-            requests.filter((item) => item.status === "Pending").length,
+            visibleRequests.filter((item) => item.status === "Pending").length,
             Clock3,
           ],
           [
             "High Priority",
-            requests.filter(
+            visibleRequests.filter(
               (item) =>
                 ["High", "Critical"].includes(item.priority) &&
                 item.status !== "Resolved",
@@ -75,7 +132,7 @@ export default function Maintenance() {
           ],
           [
             "Resolved",
-            requests.filter((item) => item.status === "Resolved").length,
+            visibleRequests.filter((item) => item.status === "Resolved").length,
             CheckCircle2,
           ],
         ].map(([label, value, Icon]) => (
@@ -145,7 +202,7 @@ export default function Maintenance() {
               </tr>
             </thead>
             <tbody>
-              {visible.map((item) => (
+              {visibleRequests.map((item) => (
                 <tr key={item.id} className="border-b">
                   <td className="px-4 py-4 font-semibold text-[#4f3448]">
                     {item.id}

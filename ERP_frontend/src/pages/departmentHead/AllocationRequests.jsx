@@ -7,65 +7,84 @@ import {
   XCircle,
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
-
-const read = (key, fallback = []) => {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || fallback;
-  } catch {
-    return fallback;
-  }
-};
-const initialRequests = [
-  {
-    id: "AR-0221",
-    employee: "Priya Sharma",
-    department: "Information Technology",
-    assetType: "Laptop",
-    preferredAssetTag: "AF-0002",
-    reason: "Replacement device for client project",
-    requestedOn: "11 Jul 2026",
-    status: "Pending",
-  },
-  {
-    id: "AR-0222",
-    employee: "Aman Gupta",
-    department: "Operations",
-    assetType: "Projector",
-    preferredAssetTag: "",
-    reason: "Weekly operations review",
-    requestedOn: "12 Jul 2026",
-    status: "Pending",
-  },
-];
+import { API_ENDPOINTS } from "../../config/apis";
 
 export default function AllocationRequests() {
   const { user } = useAuth();
   const department = user?.department || "Unassigned";
-  const [requests, setRequests] = useState(() =>
-    read("assetflow_allocation_requests", initialRequests),
-  );
-  const [transfers, setTransfers] = useState(() => read("assetflow_transfers"));
-  const [allocations, setAllocations] = useState(() =>
-    read("assetflow_allocations"),
-  );
-  const [assets, setAssets] = useState(() => read("assetflow_assets"));
+  const [requests, setRequests] = useState([]);
+  const [transfers, setTransfers] = useState([]);
+  const [allocations, setAllocations] = useState([]);
+  const [assets, setAssets] = useState([]);
   const [tab, setTab] = useState("allocation");
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   useEffect(() => {
-    localStorage.setItem(
-      "assetflow_allocation_requests",
-      JSON.stringify(requests),
-    );
-  }, [requests]);
-  useEffect(() => {
-    localStorage.setItem("assetflow_transfers", JSON.stringify(transfers));
-  }, [transfers]);
-  useEffect(() => {
-    localStorage.setItem("assetflow_allocations", JSON.stringify(allocations));
-  }, [allocations]);
-  useEffect(() => {
-    localStorage.setItem("assetflow_assets", JSON.stringify(assets));
-  }, [assets]);
+    const token = localStorage.getItem("assetflow_token");
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [allocRes, transferRes, assetRes, reqRes] = await Promise.all([
+          fetch(API_ENDPOINTS.ALLOCATIONS.BASE, { headers }),
+          fetch(API_ENDPOINTS.ALLOCATIONS.TRANSFERS, { headers }),
+          fetch(API_ENDPOINTS.ASSETS.GET_ALL, { headers }),
+          fetch(API_ENDPOINTS.ALLOCATIONS.REQUESTS, { headers }),
+        ]);
+        const [allocJson, transferJson, assetJson, reqJson] = await Promise.all([
+          allocRes.json(),
+          transferRes.json(),
+          assetRes.json(),
+          reqRes.json(),
+        ]);
+
+        if (!allocJson.success) throw new Error(allocJson.error || "Failed to load allocations");
+        if (!transferJson.success) throw new Error(transferJson.error || "Failed to load transfers");
+        if (!assetJson.success) throw new Error(assetJson.error || "Failed to load assets");
+        if (!reqJson.success) throw new Error(reqJson.error || "Failed to load allocation requests");
+
+        setRequests(
+          reqJson.data.map((item) => ({
+            id: item.id,
+            employee: item.first_name || item.last_name ? `${item.first_name || ""} ${item.last_name || ""}`.trim() : "Unknown",
+            department: item.department_name || "Unassigned",
+            assetType: item.category_name || "Unknown",
+            preferredAssetTag: item.preferred_asset_tag || "",
+            reason: item.reason || "",
+            requestedOn: item.created_at ? new Date(item.created_at).toLocaleDateString("en-IN") : "",
+            status: item.status || "PENDING",
+          })),
+        );
+
+        setTransfers(
+          transferJson.data.map((item) => ({
+            id: item.id,
+            assetName: item.asset_name,
+            assetTag: item.asset_tag,
+            from: item.from_department || "Unknown",
+            to: item.to_department || "Unknown",
+            reason: item.reason,
+            status: item.status || "Requested",
+          })),
+        );
+
+        setAllocations(
+          allocJson.data.filter((item) => item.department_name === department),
+        );
+
+        setAssets(assetJson.data);
+      } catch (err) {
+        setError(err.message || "Unable to load allocation requests.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [department]);
   const scopedRequests = requests.filter(
     (item) =>
       item.department === department &&
@@ -75,136 +94,63 @@ export default function AllocationRequests() {
   );
   const scopedTransfers = transfers.filter(
     (item) =>
-      item.department === department &&
+      (item.from === department || item.to === department) &&
       [item.id, item.assetName, item.from, item.to].some((value) =>
         value.toLowerCase().includes(search.toLowerCase()),
       ),
   );
 
-  const decideAllocation = (request, decision) => {
-    if (decision === "Rejected")
-      return setRequests(
-        requests.map((item) =>
-          item.id === request.id
-            ? {
-                ...item,
-                status: "Rejected",
-                decidedBy: user.fullName || user.email,
-              }
-            : item,
-        ),
-      );
-    const asset =
-      assets.find(
-        (item) =>
-          item.tag === request.preferredAssetTag && item.status === "Available",
-      ) ||
-      assets.find(
-        (item) => item.department === department && item.status === "Available",
-      );
-    if (!asset)
-      return setRequests(
-        requests.map((item) =>
-          item.id === request.id
-            ? {
-                ...item,
-                status: "Approved - Awaiting Available Asset",
-                decidedBy: user.fullName || user.email,
-              }
-            : item,
-        ),
-      );
-    const allocation = {
-      id: `AL-${String(200 + allocations.length).padStart(4, "0")}`,
-      assetTag: asset.tag,
-      assetName: asset.name,
-      holder: request.employee,
-      holderType: "Employee",
-      department,
-      allocatedOn: new Date().toISOString().slice(0, 10),
-      expectedReturn: "",
-      status: "Active",
-      history: [`Approved and allocated by ${user.fullName || user.email}`],
-    };
-    setAllocations([...allocations, allocation]);
-    setAssets(
-      assets.map((item) =>
-        item.tag === asset.tag
-          ? {
-              ...item,
-              status: "Allocated",
-              holder: request.employee,
-              department,
-              allocationHistory: [
-                ...(item.allocationHistory || []),
-                {
-                  event: `Allocated to ${request.employee}`,
-                  date: new Date().toLocaleDateString("en-IN"),
-                  detail: `Approved by Department Head`,
-                },
-              ],
-            }
-          : item,
-      ),
-    );
-    setRequests(
-      requests.map((item) =>
-        item.id === request.id
-          ? {
-              ...item,
-              status: "Approved",
-              allocatedAsset: asset.tag,
-              decidedBy: user.fullName || user.email,
-            }
-          : item,
-      ),
-    );
+  const decideAllocation = async (request, decision) => {
+    try {
+      const token = localStorage.getItem("assetflow_token");
+      const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+      if (decision === "Rejected") {
+        const res = await fetch(API_ENDPOINTS.ALLOCATIONS.REJECT_REQUEST(request.id), { method: "PUT", headers });
+        if (!res.ok) throw new Error("Failed to reject request");
+        setRequests(requests.map(r => r.id === request.id ? { ...r, status: "REJECTED" } : r));
+        return;
+      }
+
+      const asset =
+        assets.find((item) => item.tag === request.preferredAssetTag && item.status === "Available") ||
+        assets.find((item) => item.department_name === department && item.status === "Available") ||
+        assets.find((item) => item.status === "Available");
+
+      if (!asset) {
+        alert("No available assets to allocate.");
+        return;
+      }
+
+      const res = await fetch(API_ENDPOINTS.ALLOCATIONS.APPROVE_REQUEST(request.id), {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ allocated_asset_id: asset.id })
+      });
+      
+      if (!res.ok) throw new Error("Failed to approve request");
+      
+      setRequests(requests.map(r => r.id === request.id ? { ...r, status: "APPROVED" } : r));
+      setAssets(assets.map(a => a.id === asset.id ? { ...a, status: "Allocated" } : a));
+    } catch (err) {
+      alert(err.message);
+    }
   };
-  const decideTransfer = (request, decision) => {
-    setTransfers(
-      transfers.map((item) =>
-        item.id === request.id
-          ? {
-              ...item,
-              status: decision,
-              decidedBy: user.fullName || user.email,
-            }
-          : item,
-      ),
-    );
-    if (decision === "Approved") {
-      setAllocations(
-        allocations.map((item) =>
-          item.assetTag === request.assetTag && item.status === "Active"
-            ? {
-                ...item,
-                holder: request.to,
-                history: [
-                  ...item.history,
-                  `Department Head approved transfer from ${request.from} to ${request.to}`,
-                ],
-              }
-            : item,
-        ),
-      );
-      setAssets(
-        assets.map((item) =>
-          item.tag === request.assetTag
-            ? {
-                ...item,
-                holder: request.to,
-                allocationHistory: [
-                  ...(item.allocationHistory || []),
-                  {
-                    event: `Transferred to ${request.to}`,
-                    date: new Date().toLocaleDateString("en-IN"),
-                    detail: `Approved by Department Head`,
-                  },
-                ],
-              }
-            : item,
-        ),
-      );
+
+  const decideTransfer = async (request, decision) => {
+    try {
+      const token = localStorage.getItem("assetflow_token");
+      const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+      const endpoint = decision === "Approved" 
+        ? API_ENDPOINTS.ALLOCATIONS.APPROVE_TRANSFER(request.id)
+        : API_ENDPOINTS.ALLOCATIONS.REJECT_TRANSFER(request.id);
+
+      const res = await fetch(endpoint, { method: "PUT", headers });
+      if (!res.ok) throw new Error(`Failed to ${decision.toLowerCase()} transfer`);
+
+      setTransfers(transfers.map(t => t.id === request.id ? { ...t, status: decision === "Approved" ? "APPROVED" : "REJECTED" } : t));
+    } catch (err) {
+      alert(err.message);
     }
   };
 
@@ -223,25 +169,25 @@ export default function AllocationRequests() {
         {[
           [
             "Pending Allocations",
-            scopedRequests.filter((item) => item.status === "Pending").length,
+            scopedRequests.filter((item) => item.status === "PENDING").length,
             PackagePlus,
           ],
           [
             "Approved Allocations",
-            scopedRequests.filter((item) => item.status.startsWith("Approved"))
+            scopedRequests.filter((item) => item.status === "APPROVED")
               .length,
             Check,
           ],
           [
             "Pending Transfers",
-            scopedTransfers.filter((item) => item.status === "Requested")
+            scopedTransfers.filter((item) => item.status === "Requested" || item.status === "PENDING")
               .length,
             ArrowRightLeft,
           ],
           [
             "Rejected Requests",
             [...scopedRequests, ...scopedTransfers].filter(
-              (item) => item.status === "Rejected",
+              (item) => item.status === "Rejected" || item.status === "REJECTED",
             ).length,
             XCircle,
           ],
@@ -338,7 +284,7 @@ function RequestTable({ rows, decide }) {
                 <Status value={item.status} />
               </td>
               <td className="px-4 py-4">
-                {item.status === "Pending" && (
+                {item.status === "PENDING" && (
                   <>
                     <button
                       className="mr-3 font-medium text-emerald-700"
@@ -400,7 +346,7 @@ function TransferTable({ rows, decide }) {
                 <Status value={item.status} />
               </td>
               <td className="px-4 py-4">
-                {item.status === "Requested" && (
+                {(item.status === "Requested" || item.status === "PENDING") && (
                   <>
                     <button
                       className="mr-3 font-medium text-emerald-700"
@@ -427,7 +373,7 @@ function TransferTable({ rows, decide }) {
 function Status({ value }) {
   return (
     <span
-      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${value.startsWith("Approved") ? "bg-emerald-50 text-emerald-700" : value === "Rejected" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}
+      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${value.toUpperCase() === "APPROVED" ? "bg-emerald-50 text-emerald-700" : value.toUpperCase() === "REJECTED" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}
     >
       {value}
     </span>

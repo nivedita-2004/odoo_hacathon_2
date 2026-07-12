@@ -1,30 +1,88 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Boxes, Eye, Search, UserCheck, Users, X } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
-
-const read = (key) => {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || [];
-  } catch {
-    return [];
-  }
-};
+import { API_ENDPOINTS } from "../../config/apis";
 
 export default function DepartmentAssets() {
   const { user } = useAuth();
   const department = user?.department || "Unassigned";
+  const [assets, setAssets] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [allocations, setAllocations] = useState([]);
   const [tab, setTab] = useState("assets");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
-  const assets = read("assetflow_assets").filter(
-    (item) => item.department === department,
-  );
-  const employees = read("assetflow_employees").filter(
-    (item) => item.department === department,
-  );
-  const allocations = read("assetflow_allocations").filter(
-    (item) => item.department === department && item.status === "Active",
-  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("assetflow_token");
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [assetsRes, employeesRes, allocationsRes] = await Promise.all([
+          fetch(API_ENDPOINTS.ASSETS.GET_ALL, { headers }),
+          fetch(API_ENDPOINTS.ORGANIZATION.EMPLOYEES, { headers }),
+          fetch(API_ENDPOINTS.ALLOCATIONS.BASE, { headers }),
+        ]);
+        const [assetsJson, employeesJson, allocationsJson] = await Promise.all([
+          assetsRes.json(),
+          employeesRes.json(),
+          allocationsRes.json(),
+        ]);
+
+        if (!assetsJson.success) throw new Error(assetsJson.error || "Failed to load assets");
+        if (!employeesJson.success) throw new Error(employeesJson.error || "Failed to load employees");
+        if (!allocationsJson.success) throw new Error(allocationsJson.error || "Failed to load allocations");
+
+        setAssets(
+          assetsJson.data.map((item) => ({
+            ...item,
+            tag: item.asset_tag,
+            category: item.category_name || "Uncategorized",
+            location: item.department_name || "Not set",
+            condition: item.condition || "Not set",
+            status: item.status || "Unknown",
+            holder:
+              item.first_name || item.last_name
+                ? `${item.first_name || ""} ${item.last_name || ""}`.trim()
+                : item.department_name || "Unassigned",
+          })),
+        );
+
+        setEmployees(
+          employeesJson.data
+            .filter((item) => item.department_name === department)
+            .map((item) => ({
+              ...item,
+              name: `${item.first_name || ""} ${item.last_name || ""}`.trim(),
+            })),
+        );
+
+        setAllocations(
+          allocationsJson.data
+            .filter((item) => item.department_name === department)
+            .map((item) => ({
+              ...item,
+              assetTag: item.asset_tag,
+              holder:
+                item.first_name || item.last_name
+                  ? `${item.first_name || ""} ${item.last_name || ""}`.trim()
+                  : item.department_name || "Unassigned",
+            })),
+        );
+      } catch (err) {
+        setError(err.message || "Unable to load department assets.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [department]);
+
   const rows = useMemo(
     () =>
       (tab === "assets" ? assets : employees).filter((item) =>
@@ -34,6 +92,9 @@ export default function DepartmentAssets() {
       ),
     [tab, search, assets, employees],
   );
+
+  if (loading) return <div className="p-10 text-center text-slate-500">Loading department assets...</div>;
+  if (error) return <div className="p-10 text-center text-red-500">Error: {error}</div>;
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-6">

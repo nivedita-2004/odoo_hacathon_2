@@ -65,17 +65,15 @@ async function seed() {
       );
       empIds.push(res.rows[0].id);
 
-      // Create a user for the Admin
-      if (emp.role === 'ADMIN') {
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash('password123', salt);
-        await client.query(
-          `INSERT INTO users (organization_id, employee_id, email, password_hash, status) 
-           VALUES ($1, $2, $3, $4, 'ACTIVE')`,
-          [orgId, res.rows[0].id, emp.email, passwordHash]
-        );
-        console.log(`Admin user created: ${emp.email} / password123`);
-      }
+      // Create a user account for every seeded employee
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash('password123', salt);
+      await client.query(
+        `INSERT INTO users (organization_id, employee_id, email, password_hash, status) 
+         VALUES ($1, $2, $3, $4, 'ACTIVE') RETURNING id`,
+        [orgId, res.rows[0].id, emp.email, passwordHash]
+      );
+      console.log(`User created: ${emp.email} / password123`);
     }
 
     console.log('Inserting Categories & Statuses...');

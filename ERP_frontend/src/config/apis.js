@@ -48,6 +48,10 @@ export const API_ENDPOINTS = {
     TRANSFERS: `${BASE_URL}/allocations/transfers`,
     REQUEST_TRANSFER: `${BASE_URL}/allocations/transfers/request`,
     APPROVE_TRANSFER: (id) => `${BASE_URL}/allocations/transfers/${id}/approve`,
+    REJECT_TRANSFER: (id) => `${BASE_URL}/allocations/transfers/${id}/reject`,
+    REQUESTS: `${BASE_URL}/allocations/requests`,
+    APPROVE_REQUEST: (id) => `${BASE_URL}/allocations/requests/${id}/approve`,
+    REJECT_REQUEST: (id) => `${BASE_URL}/allocations/requests/${id}/reject`,
   },
   BOOKINGS: {
     BASE: `${BASE_URL}/bookings`,

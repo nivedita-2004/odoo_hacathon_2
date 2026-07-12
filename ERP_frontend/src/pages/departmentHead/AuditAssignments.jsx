@@ -9,24 +9,55 @@ import {
   X,
 } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
-
-const read = (key) => {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || [];
-  } catch {
-    return [];
-  }
-};
+import { API_ENDPOINTS } from "../../config/apis";
 
 export default function AuditAssignments() {
   const { user } = useAuth();
   const department = user?.department || "Unassigned";
-  const [cycles, setCycles] = useState(() => read("assetflow_audit_cycles"));
+  const [cycles, setCycles] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   useEffect(() => {
-    localStorage.setItem("assetflow_audit_cycles", JSON.stringify(cycles));
-  }, [cycles]);
+    const token = localStorage.getItem("assetflow_token");
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+    const fetchCycles = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(API_ENDPOINTS.AUDITS.BASE, { headers });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || "Failed to load audit cycles");
+
+        setCycles(
+          data.data.map((item) => ({
+            ...item,
+            scopeType: item.department_name ? "Department" : "Personal",
+            scopeValue: item.department_name || item.auditor_name || "",
+            auditors: item.auditor_name ? [item.auditor_name] : [],
+            items: item.items?.map((asset) => ({
+              assetId: asset.asset_id,
+              assetTag: asset.asset_tag,
+              assetName: asset.asset_name,
+              location: asset.location || "",
+              result: asset.status === "PENDING" ? "Pending" : asset.status || "Pending",
+              notes: asset.notes || "",
+            })) || [],
+            history: item.history || [],
+          })),
+        );
+      } catch (err) {
+        setError(err.message || "Unable to load audit cycles.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCycles();
+  }, []);
+
   const assigned = cycles
     .filter(
       (cycle) =>
@@ -41,45 +72,72 @@ export default function AuditAssignments() {
       ),
     );
   const selected = cycles.find((item) => item.id === selectedId);
-  const update = (assetTag, field, value) => {
-    if (selected.status === "Closed") return;
-    setCycles(
-      cycles.map((cycle) =>
-        cycle.id === selected.id
-          ? {
-              ...cycle,
-              status: "In Progress",
-              items: cycle.items.map((item) =>
-                item.assetTag === assetTag
-                  ? {
-                      ...item,
-                      [field]: value,
-                      checkedBy:
-                        field === "result"
-                          ? user.fullName || user.email
-                          : item.checkedBy,
-                      checkedOn:
-                        field === "result"
-                          ? new Date().toLocaleDateString("en-IN")
-                          : item.checkedOn,
-                    }
-                  : item,
-              ),
-              history:
-                field === "result"
-                  ? [
-                      ...cycle.history,
-                      {
-                        event: `${assetTag} marked ${value}`,
-                        date: new Date().toLocaleDateString("en-IN"),
-                        detail: `Verified by ${user.fullName || user.email}`,
-                      },
-                    ]
-                  : cycle.history,
-            }
-          : cycle,
-      ),
-    );
+  const update = async (assetTag, field, value) => {
+    if (!selected || selected.status === "Closed") return;
+
+    if (field === "notes") {
+      setCycles(
+        cycles.map((cycle) =>
+          cycle.id === selected.id
+            ? {
+                ...cycle,
+                items: cycle.items.map((item) =>
+                  item.assetTag === assetTag ? { ...item, notes: value } : item
+                ),
+              }
+            : cycle
+        )
+      );
+      return;
+    }
+
+    if (field === "result") {
+      try {
+        const token = localStorage.getItem("assetflow_token");
+        const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+        
+        const assetItem = selected.items.find((i) => i.assetTag === assetTag);
+        if (!assetItem) return;
+
+        const res = await fetch(API_ENDPOINTS.AUDITS.VERIFY(selected.id), {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            asset_id: assetItem.assetId,
+            status: value.toUpperCase(),
+            notes: assetItem.notes
+          }),
+        });
+
+        if (!res.ok) throw new Error("Failed to verify asset");
+
+        setCycles(
+          cycles.map((cycle) =>
+            cycle.id === selected.id
+              ? {
+                  ...cycle,
+                  status: "In Progress",
+                  items: cycle.items.map((item) =>
+                    item.assetTag === assetTag
+                      ? { ...item, result: value, checkedBy: user.fullName || user.email, checkedOn: new Date().toLocaleDateString("en-IN") }
+                      : item
+                  ),
+                  history: [
+                    ...cycle.history,
+                    {
+                      event: `${assetTag} marked ${value}`,
+                      date: new Date().toLocaleDateString("en-IN"),
+                      detail: `Verified by ${user.fullName || user.email}`,
+                    },
+                  ],
+                }
+              : cycle
+          )
+        );
+      } catch (err) {
+        alert(err.message);
+      }
+    }
   };
   return (
     <div className="mx-auto max-w-[1500px] space-y-6">

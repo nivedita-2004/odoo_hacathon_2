@@ -108,6 +108,36 @@ const getActiveAllocationByAsset = `
   LIMIT 1;
 `;
 
+const getAllocationRequests = `
+  SELECT 
+    ar.id, ar.category_name, ar.reason, ar.status, ar.created_at,
+    e.first_name, e.last_name, e.id as employee_id,
+    d.name as department_name, d.id as department_id,
+    a.asset_tag as preferred_asset_tag, a.name as preferred_asset_name
+  FROM allocation_requests ar
+  LEFT JOIN employees e ON ar.employee_id = e.id
+  LEFT JOIN departments d ON ar.department_id = d.id
+  LEFT JOIN assets a ON ar.preferred_asset_id = a.id
+  WHERE ar.organization_id = $1
+  ORDER BY ar.created_at DESC;
+`;
+
+const createAllocationRequest = `
+  INSERT INTO allocation_requests (
+    organization_id, employee_id, department_id, category_name, preferred_asset_id, reason
+  ) VALUES (
+    $1, $2, $3, $4, $5, $6
+  ) RETURNING id;
+`;
+
+const updateAllocationRequestStatus = `
+  UPDATE allocation_requests 
+  SET status = $1, decided_by = $2, allocated_asset_id = $3, updated_at = CURRENT_TIMESTAMP
+  WHERE id = $4 AND organization_id = $5
+  RETURNING *;
+`;
+
+
 module.exports = {
   getActiveAllocations,
   getAvailableAssets,
@@ -118,5 +148,8 @@ module.exports = {
   createTransfer,
   updateTransferStatus,
   getReturnsHistory,
-  getActiveAllocationByAsset
+  getActiveAllocationByAsset,
+  getAllocationRequests,
+  createAllocationRequest,
+  updateAllocationRequestStatus
 };

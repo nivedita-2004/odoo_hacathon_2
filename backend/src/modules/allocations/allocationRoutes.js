@@ -12,9 +12,16 @@ router.post('/allocate', allocationController.allocateAsset);
 router.post('/return', allocationController.returnAsset);
 router.get('/returns', allocationController.getReturns);
 
+// Allocation Requests routes
+router.get('/requests', allocationController.getAllocationRequests);
+router.post('/requests', allocationController.createAllocationRequest);
+router.put('/requests/:id/approve', allocationController.approveAllocationRequest);
+router.put('/requests/:id/reject', allocationController.rejectAllocationRequest);
+
 // Transfer routes
 router.get('/transfers', allocationController.getTransfers);
 router.post('/transfers/request', allocationController.requestTransfer);
-router.post('/transfers/:id/approve', allocationController.approveTransfer);
+router.put('/transfers/:id/approve', allocationController.approveTransfer);
+router.put('/transfers/:id/reject', allocationController.rejectTransfer);
 
 module.exports = router;
