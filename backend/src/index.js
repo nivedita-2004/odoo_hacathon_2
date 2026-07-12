@@ -6,6 +6,8 @@ const cors = require('cors');
 
 const authRoutes = require('./modules/auth/authRoutes');
 const dashboardRoutes = require('./modules/dashboard/dashboardRoutes');
+const organizationRoutes = require('./modules/organization/organizationRoutes');
+
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -16,9 +18,13 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date() });
 });
 
+const assetRoutes = require('./modules/assets/assetRoutes');
+
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/organization', organizationRoutes);
+app.use('/api/assets', assetRoutes);
 
 
 app.listen(port, () => {

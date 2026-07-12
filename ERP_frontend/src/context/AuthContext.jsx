@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { AuthContext } from "./auth-context";
+import { useMemo, useState, createContext } from "react";
 import { API_ENDPOINTS } from "../config/apis";
+
+export const AuthContext = createContext(null);
 
 const STORAGE_KEY = "assetflow_user";
 const TOKEN_KEY = "assetflow_token";
@@ -32,10 +33,12 @@ export function AuthProvider({ children }) {
       const data = await response.json();
       
       if (data.success) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user));
-        localStorage.setItem(TOKEN_KEY, data.token);
-        setUser(data.user);
-        return data.user;
+        if (data.action === 'LOGIN') {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user));
+          localStorage.setItem(TOKEN_KEY, data.token);
+          setUser(data.user);
+        }
+        return data;
       }
       return null;
     } catch (error) {
@@ -79,10 +82,12 @@ export function AuthProvider({ children }) {
       const data = await response.json();
 
       if (data.success) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user));
-        localStorage.setItem(TOKEN_KEY, data.token);
-        setUser(data.user);
-        return { success: true, user: data.user };
+        if (!data.action || data.action === 'LOGIN') {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user));
+          localStorage.setItem(TOKEN_KEY, data.token);
+          setUser(data.user);
+        }
+        return data;
       }
       return { success: false, error: data.error || "Verification failed" };
     } catch (error) {

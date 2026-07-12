@@ -27,34 +27,25 @@ const register = async (req, res) => {
 
     let userId;
     if (userCheck.rows.length > 0) {
-      userId = userCheck.rows[0].id; // Reusing pending user
-      // Optionally update the password hash here if they changed it during retry
+      userId = userCheck.rows[0].id;
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(password, salt);
       await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
     } else {
-      // Create new pending user
-      const orgCheck = await client.query('SELECT id FROM organizations WHERE name = $1 LIMIT 1', ['Default Organization']);
-      let orgId;
-      if (orgCheck.rows.length === 0) {
-        const newOrg = await client.query("INSERT INTO organizations (name, billing_email) VALUES ('Default Organization', 'admin@example.com') RETURNING id");
-        orgId = newOrg.rows[0].id;
-      } else {
-        orgId = orgCheck.rows[0].id;
-      }
-
       const nameParts = fullName.trim().split(' ');
       const firstName = nameParts[0];
       const lastName = nameParts.slice(1).join(' ') || '';
 
-      const empResult = await client.query(queries.createEmployee, [orgId, firstName, lastName, email.trim().toLowerCase()]);
-      const employeeId = empResult.rows[0].id;
-
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(password, salt);
 
-      const userResult = await client.query("INSERT INTO users (organization_id, employee_id, email, password_hash, status) VALUES ($1, $2, $3, $4, 'PENDING_VERIFICATION') RETURNING id", [
-        orgId, employeeId, email.trim().toLowerCase(), passwordHash
+      // Create employee with no organization yet
+      const empResult = await client.query(queries.createEmployee, [null, firstName, lastName, email.trim().toLowerCase(), 'ADMIN']);
+      const employeeId = empResult.rows[0].id;
+
+      // Create new pending user with no organization
+      const userResult = await client.query("INSERT INTO users (employee_id, email, password_hash, status) VALUES ($1, $2, $3, 'PENDING_VERIFICATION') RETURNING id", [
+        employeeId, email.trim().toLowerCase(), passwordHash
       ]);
       userId = userResult.rows[0].id;
     }
@@ -115,18 +106,28 @@ const verifyRegistrationOtp = async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Optionally issue JWT directly so they don't have to login again
+    // If they have no organization, send them to Workspace Portal
+    if (!user.organization_id) {
+      const setupToken = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '15m' });
+      return res.status(200).json({
+        success: true,
+        action: 'CREATE_WORKSPACE',
+        setupToken,
+        user: { id: user.id, email: user.email }
+      });
+    }
+
+    // Otherwise, log them into their organization
     const tokenPayload = { user: { id: user.id, organization_id: user.organization_id, employee_id: user.employee_id } };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1d' });
 
-    // Fetch full user details for the frontend state
     const fullUserCheck = await client.query(queries.getUserByEmailAndOrg, [user.email, user.organization_id]);
-    const fullUser = fullUserCheck.rows[0];
+    const fullUser = fullUserCheck.rows[0] || user;
 
     res.status(200).json({
       success: true,
       token,
-      user: { id: fullUser.id, email: fullUser.email, fullName: `${fullUser.first_name} ${fullUser.last_name}`.trim(), employeeId: fullUser.employee_id, role: 'ADMIN' }
+      user: { id: fullUser.id, email: fullUser.email, fullName: `${fullUser.first_name || ''} ${fullUser.last_name || ''}`.trim(), employeeId: fullUser.employee_id, role: fullUser.role || 'EMPLOYEE' }
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -146,39 +147,39 @@ const login = async (req, res) => {
     }
 
     const { rows } = await db.query(queries.getUserByEmail, [email.trim().toLowerCase()]);
-    const user = rows[0];
-
-    if (!user) {
+    
+    if (rows.length === 0) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
+    const user = rows[0];
     const isMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!isMatch) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
-    const payload = {
-      user: {
-        id: user.id,
-        organization_id: user.organization_id,
-        employee_id: user.employee_id
-      }
-    };
+    const workspacesRes = await db.query(queries.getWorkspacesByEmail, [email.trim().toLowerCase()]);
+    const workspaces = workspacesRes.rows;
 
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+    const setupToken = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '15m' });
 
-    res.status(200).json({
-      success: true,
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: `${user.first_name} ${user.last_name}`.trim(),
-        employeeId: user.employee_id,
-        role: 'ADMIN' // Hardcoded for hackathon, usually fetched from user_roles
-      }
-    });
+    if (workspaces.length === 0) {
+      return res.status(200).json({
+        success: true,
+        action: 'CREATE_WORKSPACE',
+        setupToken,
+        user: { email: user.email, fullName: `${user.first_name || ''} ${user.last_name || ''}`.trim() }
+      });
+    } else {
+      return res.status(200).json({
+        success: true,
+        action: 'SELECT_WORKSPACE',
+        workspaces,
+        setupToken,
+        user: { email: user.email, fullName: `${user.first_name || ''} ${user.last_name || ''}`.trim() }
+      });
+    }
   } catch (error) {
     console.error('Error in login:', error);
     res.status(500).json({ success: false, error: 'Server Error' });
@@ -211,21 +212,8 @@ const googleAuth = async (req, res) => {
         action: 'CREATE_WORKSPACE',
         user: { email, fullName, picture }
       });
-    } else if (workspaces.length === 1) {
-      const orgId = workspaces[0].id;
-      const userRes = await db.query(queries.getUserByEmailAndOrg, [email, orgId]);
-      const user = userRes.rows[0];
-
-      const tokenPayload = { user: { id: user.id, organization_id: user.organization_id, employee_id: user.employee_id } };
-      const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1d' });
-
-      return res.status(200).json({
-        success: true,
-        action: 'LOGIN',
-        token,
-        user: { id: user.id, email: user.email, fullName: `${user.first_name} ${user.last_name}`.trim(), employeeId: user.employee_id, role: 'ADMIN' }
-      });
     } else {
+      // Always show Workspace Portal if they have 1 or more workspaces, Slack style!
       return res.status(200).json({
         success: true,
         action: 'SELECT_WORKSPACE',
@@ -281,7 +269,7 @@ const googleCreateWorkspace = async (req, res) => {
     const orgRes = await client.query(queries.createOrganization, [organizationName, email]);
     const orgId = orgRes.rows[0].id;
 
-    const empRes = await client.query(queries.createEmployee, [orgId, firstName, lastName, email]);
+    const empRes = await client.query(queries.createEmployee, [orgId, firstName, lastName, email, 'ADMIN']);
     const employeeId = empRes.rows[0].id;
 
     const userRes = await client.query(queries.createUser, [orgId, employeeId, email, 'GOOGLE_AUTH']);
@@ -306,11 +294,96 @@ const googleCreateWorkspace = async (req, res) => {
   }
 };
 
+const createWorkspace = async (req, res) => {
+  const { setupToken, organizationName } = req.body;
+  const client = await db.pool.connect();
+  try {
+    const decoded = jwt.verify(setupToken, JWT_SECRET);
+    const email = decoded.email.trim().toLowerCase();
+
+    await client.query('BEGIN');
+
+    // Get the unaffiliated user
+    const userRes = await client.query('SELECT u.*, e.first_name, e.last_name FROM users u LEFT JOIN employees e ON u.employee_id = e.id WHERE u.email = $1 AND u.deleted_at IS NULL LIMIT 1', [email]);
+    const user = userRes.rows[0];
+
+    if (!user) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (user.organization_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: 'User already has an organization' });
+    }
+
+    // Create Organization
+    const orgRes = await client.query(queries.createOrganization, [organizationName, email]);
+    const orgId = orgRes.rows[0].id;
+
+    // Update Employee with orgId
+    if (user.employee_id) {
+      await client.query('UPDATE employees SET organization_id = $1 WHERE id = $2', [orgId, user.employee_id]);
+    } else {
+       // if no employee record for some reason (e.g. google auth that didn't create one)
+       const empRes = await client.query(queries.createEmployee, [orgId, user.first_name || '', user.last_name || '', email, 'ADMIN']);
+       const employeeId = empRes.rows[0].id;
+       await client.query('UPDATE users SET employee_id = $1 WHERE id = $2', [employeeId, user.id]);
+       user.employee_id = employeeId;
+    }
+
+    // Update User with orgId
+    await client.query('UPDATE users SET organization_id = $1 WHERE id = $2', [orgId, user.id]);
+
+    await client.query('COMMIT');
+
+    const tokenPayload = { user: { id: user.id, organization_id: orgId, employee_id: user.employee_id } };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1d' });
+
+    res.status(201).json({
+      success: true,
+      token,
+      user: { id: user.id, email: user.email, fullName: `${user.first_name || ''} ${user.last_name || ''}`.trim(), employeeId: user.employee_id, role: 'ADMIN' }
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error creating workspace:', err);
+    res.status(500).json({ success: false, error: 'Server Error or Invalid Token' });
+  } finally {
+    client.release();
+  }
+};
+
+const selectWorkspace = async (req, res) => {
+  const { setupToken, organizationId } = req.body;
+  try {
+    const decoded = jwt.verify(setupToken, JWT_SECRET);
+    const email = decoded.email.trim().toLowerCase();
+
+    const userRes = await db.query(queries.getUserByEmailAndOrg, [email, organizationId]);
+    const user = userRes.rows[0];
+    if (!user) return res.status(401).json({ success: false, error: 'User not in this organization' });
+
+    const tokenPayload = { user: { id: user.id, organization_id: user.organization_id, employee_id: user.employee_id } };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1d' });
+
+    return res.status(200).json({
+      success: true,
+      token,
+      user: { id: user.id, email: user.email, fullName: `${user.first_name || ''} ${user.last_name || ''}`.trim(), employeeId: user.employee_id, role: user.role || 'EMPLOYEE' }
+    });
+  } catch (err) {
+    return res.status(401).json({ success: false, error: 'Invalid token' });
+  }
+};
+
 module.exports = {
   register,
   verifyRegistrationOtp,
   login,
   googleAuth,
   googleSelectWorkspace,
-  googleCreateWorkspace
+  googleCreateWorkspace,
+  createWorkspace,
+  selectWorkspace
 };

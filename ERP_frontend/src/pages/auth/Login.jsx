@@ -9,16 +9,17 @@ import { API_ENDPOINTS } from '../../config/apis'
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function Login() {
-  const [step, setStep] = useState('login')
+  const location = useLocation()
+  const [step, setStep] = useState(location.state?.action === 'CREATE_WORKSPACE' ? 'create_workspace' : 'login')
   const [workspaces, setWorkspaces] = useState([])
   const [googleCred, setGoogleCred] = useState(null)
+  const [setupToken, setSetupToken] = useState(location.state?.setupToken || null)
   const [newOrgName, setNewOrgName] = useState('')
 
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const { login, setUser } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
   
   const update = (event) => { setForm({ ...form, [event.target.name]: event.target.value }); setError('') }
   
@@ -30,7 +31,18 @@ export default function Login() {
     const matched = await login(form.email, form.password)
     if (!matched) return setError('Invalid email or password.')
     
-    navigate(getRoleDashboard(matched.role), { replace: true })
+    if (matched.action === 'CREATE_WORKSPACE') {
+      setSetupToken(matched.setupToken);
+      setStep('create_workspace');
+      return;
+    } else if (matched.action === 'SELECT_WORKSPACE') {
+      setWorkspaces(matched.workspaces);
+      setSetupToken(matched.setupToken);
+      setStep('select_workspace');
+      return;
+    }
+    
+    navigate(getRoleDashboard(matched.user.role), { replace: true })
   }
 
   const handleGoogleSuccess = async (credentialResponse) => {
@@ -64,10 +76,15 @@ export default function Login() {
 
   const handleWorkspaceSelect = async (orgId) => {
     try {
-      const res = await fetch(API_ENDPOINTS.AUTH.GOOGLE_SELECT, {
+      const endpoint = setupToken ? API_ENDPOINTS.AUTH.WORKSPACE_SELECT : API_ENDPOINTS.AUTH.GOOGLE_SELECT;
+      const body = setupToken 
+        ? { setupToken, organizationId: orgId }
+        : { credential: googleCred, organizationId: orgId };
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: googleCred, organizationId: orgId })
+        body: JSON.stringify(body)
       });
       const result = await res.json();
       if (result.success) {
@@ -85,10 +102,15 @@ export default function Login() {
     e.preventDefault();
     if(!newOrgName.trim()) return setError('Workspace name is required');
     try {
-      const res = await fetch(API_ENDPOINTS.AUTH.GOOGLE_CREATE, {
+      const endpoint = setupToken ? API_ENDPOINTS.AUTH.WORKSPACE_CREATE : API_ENDPOINTS.AUTH.GOOGLE_CREATE;
+      const body = setupToken 
+        ? { setupToken, organizationName: newOrgName }
+        : { credential: googleCred, organizationName: newOrgName };
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: googleCred, organizationName: newOrgName })
+        body: JSON.stringify(body)
       });
       const result = await res.json();
       if (result.success) {

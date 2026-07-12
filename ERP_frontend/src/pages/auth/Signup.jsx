@@ -38,7 +38,11 @@ export default function Signup() {
     const result = await verifyRegistration(form.email, otp)
     if (!result.success) return setError(result.error)
     
-    navigate(getRoleDashboard(result.user.role), { replace: true })
+    if (result.action === 'CREATE_WORKSPACE') {
+       navigate('/login', { state: { action: 'CREATE_WORKSPACE', setupToken: result.setupToken } })
+    } else {
+       navigate(getRoleDashboard(result.user.role), { replace: true })
+    }
   }
 
   const fields = [

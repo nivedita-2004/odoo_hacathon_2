@@ -26,8 +26,8 @@ const createOrganization = `
 `;
 
 const createEmployee = `
-  INSERT INTO employees (organization_id, first_name, last_name, email)
-  VALUES ($1, $2, $3, $4)
+  INSERT INTO employees (organization_id, first_name, last_name, email, role)
+  VALUES ($1, $2, $3, $4, COALESCE($5, 'EMPLOYEE'))
   RETURNING id, first_name, last_name;
 `;
 
