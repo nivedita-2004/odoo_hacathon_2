@@ -17,7 +17,9 @@ export const API_ENDPOINTS = {
     CREATE: `${BASE_URL}/assets`,
     BASE: `${BASE_URL}/assets`,
     METADATA: `${BASE_URL}/assets/metadata`,
-    IMPORT: `${BASE_URL}/assets/import`
+    IMPORT: `${BASE_URL}/assets/import`,
+    TIMELINE: (id) => `${BASE_URL}/assets/${id}/timeline`,
+    HEALTH: (id) => `${BASE_URL}/assets/${id}/health`
   },
   USERS: {
     GET_ALL: `${BASE_URL}/users`,
@@ -26,6 +28,7 @@ export const API_ENDPOINTS = {
   DASHBOARD: {
     ADMIN: `${BASE_URL}/dashboard/admin`,
     NOTIFICATIONS: `${BASE_URL}/dashboard/notifications`,
+    EXECUTIVE_BRIEFING: `${BASE_URL}/dashboard/executive-briefing`,
   },
   NOTIFICATIONS: {
     MARK_READ: (id) => `${BASE_URL}/notifications/${id}/read`,
@@ -80,5 +83,8 @@ export const API_ENDPOINTS = {
   },
   REPORTS: {
     BASE: `${BASE_URL}/reports`,
+  },
+  AI: {
+    ASK: `${BASE_URL}/ai/ask`,
   }
 };

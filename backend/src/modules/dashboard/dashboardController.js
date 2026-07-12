@@ -173,7 +173,58 @@ const getNotifications = async (req, res) => {
   }
 };
 
+const getExecutiveBriefing = async (req, res) => {
+  try {
+    const orgId = req.user.organization_id;
+    if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const [overdueRes, idleRes, highRiskRes] = await Promise.all([
+      db.query(queries.getOverdue, [orgId]),
+      db.query(queries.getIdleAssets, [orgId]),
+      db.query(queries.getHighRiskMaintenance, [orgId])
+    ]);
+
+    const overdueCount = overdueRes.rows.length;
+    const idleCount = idleRes.rows[0]?.count || 0;
+    const idleValue = idleRes.rows[0]?.total_value || 0;
+    const highRiskCount = highRiskRes.rows[0]?.count || 0;
+
+    let briefingText = `Executive Summary:\\n`;
+    const insights = [];
+
+    if (overdueCount > 0) {
+      insights.push(`🚨 Operational Risk: ${overdueCount} assets are currently overdue for return.`);
+    }
+    
+    if (idleCount > 0) {
+      insights.push(`💰 Capital Inefficiency: ${idleCount} assets valued at $${Number(idleValue).toLocaleString()} have been sitting idle for over 30 days.`);
+    }
+
+    if (highRiskCount > 0) {
+      insights.push(`🔧 Maintenance Alert: There are ${highRiskCount} critical maintenance requests pending resolution.`);
+    }
+
+    if (insights.length === 0) {
+      insights.push(`✅ Operations are nominal. No critical risks or inefficiencies detected today.`);
+    }
+
+    briefingText += insights.join('\\n');
+
+    res.status(200).json({
+      success: true,
+      data: {
+        text: briefingText,
+        metrics: { overdueCount, idleCount, idleValue, highRiskCount }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching executive briefing:', error);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
+
 module.exports = {
   getAdminDashboard,
-  getNotifications
+  getNotifications,
+  getExecutiveBriefing
 };

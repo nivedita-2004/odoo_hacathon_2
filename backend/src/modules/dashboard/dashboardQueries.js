@@ -224,6 +224,24 @@ const getUserNotificationReads = `
   WHERE user_id = $1
 `;
 
+const getIdleAssets = `
+  SELECT 
+    COUNT(id) as count,
+    SUM(purchase_cost) as total_value
+  FROM assets
+  WHERE status_id = (SELECT id FROM asset_status WHERE name = 'Available' LIMIT 1)
+    AND updated_at < CURRENT_TIMESTAMP - interval '30 days'
+    AND organization_id = $1;
+`;
+
+const getHighRiskMaintenance = `
+  SELECT COUNT(id) as count
+  FROM maintenance_requests
+  WHERE priority = 'Critical' AND status NOT IN ('RESOLVED', 'CLOSED')
+    AND organization_id = $1;
+`;
+
+
 module.exports = {
   getAssets,
   getAllocations,
@@ -232,6 +250,8 @@ module.exports = {
   getMaintenance,
   getAudits,
   getOverdue,
+  getIdleAssets,
+  getHighRiskMaintenance,
   getNotificationsAllocations,
   getNotificationsTransfers,
   getNotificationsReturns,

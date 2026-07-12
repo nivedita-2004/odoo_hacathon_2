@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const assetController = require('./assetController');
+const { getMetadata, getAssets, createAsset, getAssetById, exportAssets, importAssets, getAssetTimeline, getAssetHealth } = require('./assetController');
 const authMiddleware = require('../../middleware/authMiddleware');
 const authorizeRoles = require('../../middleware/rbacMiddleware');
 const multer = require('multer');
@@ -14,6 +14,8 @@ router.get('/export', authorizeRoles('ADMIN', 'ASSET_MANAGER'), assetController.
 router.post('/import', authorizeRoles('ADMIN', 'ASSET_MANAGER'), upload.single('file'), assetController.importAssets);
 router.get('/', assetController.getAssets);
 router.post('/', authorizeRoles('ADMIN', 'ASSET_MANAGER'), assetController.createAsset);
+router.get('/:id/health', assetController.getAssetHealth);
+router.get('/:id/timeline', assetController.getAssetTimeline);
 router.get('/:id', assetController.getAssetById);
 
 module.exports = router;

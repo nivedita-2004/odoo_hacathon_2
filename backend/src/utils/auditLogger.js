@@ -11,9 +11,10 @@ const db = require('../config/db');
  * @param {string} params.orgId - The UUID of the organization
  * @param {Object} [params.oldData] - JSON object of previous state
  * @param {Object} [params.newData] - JSON object of new state
+ * @param {string} [params.assetId] - Optional UUID of the asset (if entity is not ASSET itself)
  * @param {Object} [client] - Optional db client if inside a transaction
  */
-const logAudit = async ({ action, entityType, entityId, userId, orgId, oldData = null, newData = null, client = db }) => {
+const logAudit = async ({ action, entityType, entityId, userId, orgId, oldData = null, newData = null, assetId = null, client = db }) => {
   try {
     await client.query(
       `INSERT INTO activity_logs 
@@ -21,6 +22,16 @@ const logAudit = async ({ action, entityType, entityId, userId, orgId, oldData =
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [orgId, userId, action, entityType, entityId, oldData, newData]
     );
+
+    const targetAssetId = assetId || (entityType === 'ASSET' ? entityId : null);
+    if (targetAssetId) {
+      await client.query(
+        `INSERT INTO asset_events 
+          (organization_id, asset_id, event_type, actor_id, metadata)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [orgId, targetAssetId, action, userId, JSON.stringify({ entityType, entityId, oldData, newData })]
+      );
+    }
   } catch (error) {
     console.error('Failed to write audit log:', error);
     // We intentionally don't throw to prevent failing the main transaction if logging fails

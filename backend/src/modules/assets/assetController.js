@@ -78,8 +78,9 @@ const createAsset = async (req, res) => {
 
     const assetId = result.rows[0].id;
 
-    // Generate QR Code containing the Asset Tag (or URL if needed)
-    const qrData = JSON.stringify({ id: assetId, tag: asset_tag, org: orgId });
+    // Generate QR Code containing the URL to the Mobile Scan PWA
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const qrData = `${baseUrl}/scan/${assetId}`;
     const qrDataUrl = await qrcode.toDataURL(qrData, { width: 400, margin: 2, color: { dark: '#4f3448', light: '#ffffff' } });
     
     // Upload to Cloudinary
@@ -230,11 +231,121 @@ const importAssets = async (req, res) => {
   }
 };
 
+const getAssetTimeline = async (req, res) => {
+  try {
+    const orgId = req.user.organization_id;
+    const { id } = req.params;
+
+    const timelineRes = await db.query(
+      `SELECT 
+         e.id, 
+         e.event_type, 
+         e.event_timestamp as time,
+         e.metadata,
+         COALESCE(u.first_name || ' ' || u.last_name, 'System') as actor
+       FROM asset_events e
+       LEFT JOIN employees u ON e.actor_id = u.id
+       WHERE e.organization_id = $1 AND e.asset_id = $2
+       ORDER BY e.event_timestamp DESC`,
+      [orgId, id]
+    );
+
+    res.status(200).json({ success: true, data: timelineRes.rows });
+  } catch (error) {
+    console.error('Error fetching asset timeline:', error);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
+
+const getAssetHealth = async (req, res) => {
+  try {
+    const orgId = req.user.organization_id;
+    const { id } = req.params;
+
+    // 1. Fetch base asset data and maintenance count
+    const assetRes = await db.query(
+      `SELECT 
+         a.purchase_date, 
+         a.condition_id,
+         c.name as condition_name,
+         (SELECT COUNT(*) FROM maintenance_requests m WHERE m.asset_id = a.id AND m.status != 'REJECTED') as maintenance_count
+       FROM assets a
+       LEFT JOIN asset_condition c ON a.condition_id = c.id
+       WHERE a.id = $1 AND a.organization_id = $2`,
+      [id, orgId]
+    );
+
+    if (assetRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Asset not found' });
+    }
+
+    const asset = assetRes.rows[0];
+    
+    // 2. Calculate Heuristics
+    let score = 100;
+    const factors = [];
+
+    // Age Penalty (1.5 points per month)
+    let ageMonths = 0;
+    if (asset.purchase_date) {
+      ageMonths = Math.floor((new Date() - new Date(asset.purchase_date)) / (1000 * 60 * 60 * 24 * 30));
+      if (ageMonths > 0) {
+        const agePenalty = Math.min(ageMonths * 1.5, 40); // Cap age penalty at 40
+        score -= agePenalty;
+        factors.push({ name: 'Age Degradation', impact: -agePenalty, detail: `${ageMonths} months old` });
+      }
+    }
+
+    // Maintenance Penalty (10 points per repair)
+    const repairs = parseInt(asset.maintenance_count, 10);
+    if (repairs > 0) {
+      const repairPenalty = Math.min(repairs * 10, 50); // Cap repair penalty at 50
+      score -= repairPenalty;
+      factors.push({ name: 'Repair History', impact: -repairPenalty, detail: `${repairs} historical repairs` });
+    }
+
+    // Condition Penalty
+    if (asset.condition_name && asset.condition_name.toUpperCase() === 'DAMAGED') {
+      score -= 30;
+      factors.push({ name: 'Current Condition', impact: -30, detail: 'Marked as damaged' });
+    } else if (asset.condition_name && asset.condition_name.toUpperCase() === 'FAIR') {
+      score -= 10;
+      factors.push({ name: 'Current Condition', impact: -10, detail: 'Marked as fair' });
+    }
+
+    score = Math.max(0, Math.floor(score));
+
+    // Predict failure date (Heuristic: If score drops by X per month, when does it hit 0?)
+    // Simplified: 100 score = 5 years (60 months) lifetime roughly. 
+    const monthsLeft = Math.floor((score / 100) * 60);
+    const predictedDate = new Date();
+    predictedDate.setMonth(predictedDate.getMonth() + monthsLeft);
+
+    // 3. Upsert into asset_health_scores
+    await db.query(
+      `INSERT INTO asset_health_scores (organization_id, asset_id, health_score, predicted_failure_date, factors, calculated_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+       ON CONFLICT (id) DO NOTHING;`, // Note: No unique constraint on asset_id, so we'll just insert a new log for history!
+      [orgId, id, score, predictedDate.toISOString().split('T')[0], JSON.stringify(factors)]
+    );
+
+    res.status(200).json({ 
+      success: true, 
+      data: { score, predicted_failure_date: predictedDate.toISOString().split('T')[0], factors } 
+    });
+  } catch (error) {
+    console.error('Error calculating health score:', error);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
+
 module.exports = {
   getMetadata,
   getAssets,
   createAsset,
   getAssetById,
   exportAssets,
-  importAssets
+  importAssets,
+  getAssetTimeline,
+  getAssetHealth
 };

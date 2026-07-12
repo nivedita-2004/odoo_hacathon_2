@@ -33,6 +33,7 @@ import EmployeeMaintenance from "../pages/employee/Maintenance";
 import ReturnRequests from "../pages/employee/ReturnRequests";
 import Notifications from "../pages/common/Notifications";
 import Profile from "../pages/common/Profile";
+import MobileAssetScan from "../pages/common/MobileAssetScan";
 import Unauthorized from "../pages/errors/Unauthorized";
 import NotFound from "../pages/errors/NotFound";
 import ProtectedRoute from "./ProtectedRoute";
@@ -100,6 +101,7 @@ export default function AppRoutes() {
           </Route>
         </Route>
         <Route element={<ProtectedRoute />}>
+          <Route path="/scan/:id" element={<MobileAssetScan />} />
           <Route element={<DashboardLayout />}>
             {roleRoutes.map(({ role, routes }) => (
               <Route

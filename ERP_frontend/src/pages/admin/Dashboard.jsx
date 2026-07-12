@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { API_ENDPOINTS } from "../../config/apis";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import DashboardSkeleton from "../../components/layout/DashboardSkeleton";
 
 const quickActions = [
   ["Add Department", "/admin/organization-setup", Building2],
@@ -63,6 +64,7 @@ function timeAgo(dateString) {
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
+  const [briefing, setBriefing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -70,12 +72,15 @@ export default function Dashboard() {
     const fetchDashboard = async () => {
       try {
         const token = localStorage.getItem("assetflow_token");
-        const res = await fetch(API_ENDPOINTS.DASHBOARD.ADMIN, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
+        const [res, briefingRes] = await Promise.all([
+          fetch(API_ENDPOINTS.DASHBOARD.ADMIN, { headers: { "Authorization": `Bearer ${token}` } }),
+          fetch(API_ENDPOINTS.DASHBOARD.EXECUTIVE_BRIEFING, { headers: { "Authorization": `Bearer ${token}` } })
+        ]);
         const result = await res.json();
+        const briefingResult = await briefingRes.json();
         if (result.success) setData(result.data);
         else setError(result.error);
+        if (briefingResult.success) setBriefing(briefingResult.data);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -85,7 +90,7 @@ export default function Dashboard() {
     fetchDashboard();
   }, []);
 
-  if (loading) return <div className="flex min-h-[60vh] items-center justify-center text-sm font-medium text-slate-500">Loading dashboard...</div>;
+  if (loading) return <DashboardSkeleton />;
   if (error) return <div className="flex min-h-[60vh] items-center justify-center text-sm font-medium text-red-500">Error: {error}</div>;
 
   const { assets = [], allocations = [], transfers = [], bookingsData = [], maintenanceRequests = [], auditCycles = [], overdueData = [], employeesData = [], activities = [] } = data || {};
@@ -143,6 +148,43 @@ export default function Dashboard() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6 pb-10">
+      
+      {/* AI Executive Briefing */}
+      <section className="relative overflow-hidden rounded-sm bg-gradient-to-br from-[#31232e] to-[#4f3448] p-6 shadow-md border border-[#5c3e54]">
+        <div className="absolute top-0 right-0 -mr-8 -mt-8 opacity-10">
+          <Activity size={200} />
+        </div>
+        <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-center">
+          <div className="flex-1">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex items-center justify-center rounded-sm bg-white/10 p-2 text-white">
+                <Activity size={20} className="animate-pulse" />
+              </div>
+              <h2 className="text-xl font-bold text-white tracking-wide">AI Executive Briefing</h2>
+            </div>
+            <div className="space-y-3">
+              {(briefing?.text || "Analyzing enterprise asset metrics...").split('\\n').map((line, idx) => (
+                <p key={idx} className="text-[15px] font-medium leading-relaxed text-indigo-50">
+                  {line}
+                </p>
+              ))}
+            </div>
+          </div>
+          {briefing?.metrics && (
+            <div className="flex gap-4 md:flex-col lg:flex-row">
+              <div className="rounded-sm bg-black/20 p-4 backdrop-blur-sm border border-white/10">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Idle Capital</p>
+                <p className="mt-1 text-2xl font-bold text-white">${Number(briefing.metrics.idleValue).toLocaleString()}</p>
+              </div>
+              <div className="rounded-sm bg-black/20 p-4 backdrop-blur-sm border border-white/10">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Critical Repairs</p>
+                <p className="mt-1 text-2xl font-bold text-white">{briefing.metrics.highRiskCount}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
       <section className="grid grid-cols-4 gap-4">
         {kpis.map(({ label, value, Icon, tone }) => (
           <div key={label} className="rounded-sm border border-gray-200 bg-white p-5 shadow-sm transition-all hover:shadow-md">

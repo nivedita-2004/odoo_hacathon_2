@@ -38,6 +38,7 @@ const maintenanceRoutes = require('./modules/maintenance/maintenanceRoutes');
 const auditRoutes = require('./modules/audits/auditRoutes');
 const reportsRoutes = require('./modules/reports/reportsRoutes');
 const notificationsRoutes = require('./modules/notifications/notificationsRoutes');
+const aiRoutes = require('./modules/ai/aiRoutes');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
@@ -50,6 +51,7 @@ app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/audits', auditRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/ai', aiRoutes);
 
 
 app.listen(port, () => {

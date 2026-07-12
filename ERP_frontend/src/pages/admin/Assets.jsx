@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Filter, Box, QrCode, HardDrive, Download, Upload, X, History, Tag, Building2, MapPin } from 'lucide-react';
 import { API_ENDPOINTS } from '../../config/apis';
+import ListSkeleton from "../../components/layout/ListSkeleton";
 
 export default function Assets() {
   const [assets, setAssets] = useState([]);
@@ -144,7 +145,7 @@ export default function Assets() {
     a.asset_tag.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (loading || !metadata) return <div className="p-8 text-center text-gray-500">Loading Asset Directory...</div>;
+  if (loading) return <ListSkeleton />;
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
