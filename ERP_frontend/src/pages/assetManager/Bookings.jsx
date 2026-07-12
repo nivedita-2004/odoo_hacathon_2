@@ -1,4 +1,3 @@
-import P from "../common/PlaceholderPage";
-export default function Bookings() {
-  return <P title="Resource Bookings" />;
-}
+import ResourceBookings from '../admin/ResourceBookings'
+
+export default ResourceBookings

@@ -1,1 +1,3 @@
-import P from '../common/PlaceholderPage'; export default function Maintenance(){return <P title="Maintenance"/>}
+import Maintenance from '../admin/Maintenance'
+
+export default Maintenance

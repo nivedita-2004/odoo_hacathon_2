@@ -8,9 +8,11 @@ const iconMap = { asset: PackageCheck, maintenance: Wrench, booking: CalendarChe
 const colorMap = { asset: 'bg-blue-50 text-blue-700', maintenance: 'bg-amber-50 text-amber-700', booking: 'bg-violet-50 text-violet-700', transfer: 'bg-cyan-50 text-cyan-700', overdue: 'bg-red-50 text-red-700', audit: 'bg-orange-50 text-orange-700', user: 'bg-[#f1eaf0] text-[#4f3448]', alert: 'bg-red-50 text-red-700' }
 
 function buildFeed() {
+  const assets = readStore('assetflow_assets')
   const allocations = readStore('assetflow_allocations')
   const transfers = readStore('assetflow_transfers')
   const returns = readStore('assetflow_returns')
+  const returnRequests = readStore('assetflow_return_requests')
   const maintenance = readStore('assetflow_maintenance_requests')
   const bookings = readStore('assetflow_bookings')
   const reminders = readStore('assetflow_booking_reminders')
@@ -25,6 +27,7 @@ function buildFeed() {
   allocations.forEach((item) => add({ id: `allocation-${item.id}-${item.holder}`, type: 'asset', title: 'Asset Assigned', message: `${item.assetName} (${item.assetTag}) is assigned to ${item.holder}.`, time: item.allocatedOn || nowLabel(), module: 'Allocations', actor: 'Asset Manager', priority: 'normal' }, { id: `log-allocation-${item.id}`, type: 'asset', action: `Allocated ${item.assetTag} to ${item.holder}`, actor: 'Asset Manager', time: item.allocatedOn || nowLabel(), module: 'Allocations', detail: item.department }))
   transfers.forEach((item) => add({ id: `transfer-${item.id}-${item.status}`, type: 'transfer', title: `Transfer ${item.status}`, message: `${item.assetName} transfer from ${item.from} to ${item.to} is ${item.status.toLowerCase()}.`, time: item.requestedOn || nowLabel(), module: 'Transfers', actor: item.status === 'Approved' ? 'Asset Manager' : item.from, priority: item.status === 'Approved' ? 'normal' : 'attention' }, { id: `log-transfer-${item.id}`, type: 'transfer', action: `${item.status} transfer ${item.id}: ${item.from} → ${item.to}`, actor: item.status === 'Approved' ? 'Asset Manager' : item.from, time: item.requestedOn || nowLabel(), module: 'Transfers', detail: item.reason }))
   returns.forEach((item) => add({ id: `return-${item.id}`, type: 'asset', title: 'Asset Return Completed', message: `${item.assetName} was returned by ${item.holder || item.returnedBy} in ${item.condition} condition.`, time: item.date || item.returnedOn || nowLabel(), module: 'Returns', actor: item.holder || item.returnedBy, priority: 'normal' }, { id: `log-return-${item.id}`, type: 'asset', action: `Returned ${item.assetTag} in ${item.condition} condition`, actor: item.holder || item.returnedBy, time: item.date || nowLabel(), module: 'Returns', detail: item.notes }))
+  returnRequests.forEach((item) => add({ id: `return-request-${item.id}-${item.status}`, type: 'asset', title: `Return Request ${item.status}`, message: `${item.assetName} return requested by ${item.requestedBy} is ${item.status.toLowerCase()}.`, time: item.requestedOn || nowLabel(), module: 'Returns', actor: item.requestedBy, priority: item.status === 'Rejected' ? 'attention' : 'normal' }, { id: `log-return-request-${item.id}`, type: 'asset', action: `${item.status} return request ${item.id}`, actor: item.requestedBy, time: item.requestedOn || nowLabel(), module: 'Returns', detail: item.reason }))
   maintenance.forEach((item) => { const rejected = item.status === 'Rejected'; add({ id: `maintenance-${item.id}-${item.status}`, type: 'maintenance', title: `Maintenance ${item.status}`, message: `${item.id} for ${item.assetName} is ${item.status.toLowerCase()}${item.technician ? ` · Technician: ${item.technician}` : ''}.`, time: item.raisedOn || nowLabel(), module: 'Maintenance', actor: item.raisedBy, priority: rejected || ['Critical', 'High'].includes(item.priority) ? 'attention' : 'normal' }, { id: `log-maintenance-${item.id}-${item.status}`, type: 'maintenance', action: `${item.status} maintenance request ${item.id}`, actor: item.technician || 'Asset Manager', time: item.raisedOn || nowLabel(), module: 'Maintenance', detail: item.issue }) })
   bookings.forEach((item) => { const status = item.status || 'Upcoming'; add({ id: `booking-${item.id}-${status}`, type: 'booking', title: `Booking ${status === 'Cancelled' ? 'Cancelled' : 'Confirmed'}`, message: `${item.resource} is booked by ${item.bookedBy} on ${item.date}, ${item.start}–${item.end}.`, time: item.date || nowLabel(), module: 'Bookings', actor: item.bookedBy, priority: 'normal' }, { id: `log-booking-${item.id}`, type: 'booking', action: `${status} booking ${item.id} for ${item.resource}`, actor: item.bookedBy, time: item.date || nowLabel(), module: 'Bookings', detail: item.title }) })
   reminders.forEach((item) => notifications.push({ id: `reminder-${item.id}`, type: 'booking', title: 'Booking Reminder', message: item.message, time: item.date || nowLabel(), module: 'Bookings', actor: 'System', priority: 'attention' }))
@@ -39,12 +42,38 @@ function buildFeed() {
     { id: 'sample-audit', type: 'audit', title: 'Audit Discrepancy Flagged', message: 'Asset AF-0042 was marked Missing in Q3 IT Asset Verification.', time: '2 hours ago', module: 'Audits', actor: 'Rahul Verma', priority: 'critical' },
   )
   if (!logs.length) notifications.forEach((item) => logs.push({ id: `log-${item.id}`, type: item.type, action: item.message, actor: item.actor, time: item.time, module: item.module, detail: item.title }))
-  return { notifications: notifications.reverse(), logs: logs.reverse() }
+  const departmentFor = (item) => {
+    const tag = `${item.message || ''} ${item.action || ''} ${item.detail || ''}`.match(/AF-\d+/)?.[0]
+    const booking = bookings.find((row) => item.id.includes(row.id))
+    const allocation = allocations.find((row) => item.id.includes(row.id) || row.assetTag === tag)
+    const transfer = transfers.find((row) => item.id.includes(row.id) || row.assetTag === tag)
+    const overdueItem = overdue.find((row) => item.id.includes(row.id) || row.assetTag === tag)
+    const returnRequest = returnRequests.find((row) => item.id.includes(row.id) || row.assetTag === tag)
+    const audit = audits.find((row) => item.id.includes(row.id))
+    const registered = registeredUsers.find((row) => item.id.includes(row.employeeId || 'no-id'))
+    return booking?.department || allocation?.department || transfer?.department || overdueItem?.department || returnRequest?.department || (audit?.scopeType === 'Department' ? audit.scopeValue : '') || registered?.department || assets.find((row) => row.tag === tag)?.department || ''
+  }
+  const recipientFor = (item) => {
+    const booking = bookings.find((row) => item.id.includes(row.id))
+    const allocation = allocations.find((row) => item.id.includes(row.id))
+    const transfer = transfers.find((row) => item.id.includes(row.id))
+    const overdueItem = overdue.find((row) => item.id.includes(row.id))
+    const returnRequest = returnRequests.find((row) => item.id.includes(row.id))
+    const maintenanceItem = readStore('assetflow_maintenance_requests').find((row) => item.id.includes(row.id))
+    return booking?.bookedBy || allocation?.holder || transfer?.to || transfer?.from || overdueItem?.holder || returnRequest?.requestedBy || maintenanceItem?.raisedBy || item.actor || ''
+  }
+  return { notifications: notifications.reverse().map((item) => ({ ...item, department: departmentFor(item), recipient: recipientFor(item) })), logs: logs.reverse().map((item) => ({ ...item, department: departmentFor(item), recipient: recipientFor(item) })) }
 }
 
 export default function Notifications({ initialTab = 'notifications' }) {
   const { user } = useAuth()
   const feed = useMemo(() => buildFeed(), [])
+  const departmentScoped = user?.role === 'DEPARTMENT_HEAD'
+  const employeeScoped = user?.role === 'EMPLOYEE'
+  const identities = [user?.fullName, user?.email, user?.employeeId].filter(Boolean).map((item) => item.toLowerCase())
+  const belongsToEmployee = (item) => identities.some((identity) => item.recipient?.toLowerCase() === identity || item.actor?.toLowerCase() === identity || item.message?.toLowerCase().includes(identity) || item.action?.toLowerCase().includes(identity))
+  const notifications = departmentScoped ? feed.notifications.filter((item) => item.department === user.department) : employeeScoped ? feed.notifications.filter(belongsToEmployee) : feed.notifications
+  const logs = departmentScoped ? feed.logs.filter((item) => item.department === user.department) : employeeScoped ? feed.logs.filter(belongsToEmployee) : feed.logs
   const [tab, setTab] = useState(initialTab)
   const [search, setSearch] = useState('')
   const [type, setType] = useState('All')
@@ -53,14 +82,14 @@ export default function Notifications({ initialTab = 'notifications' }) {
   const [selected, setSelected] = useState(null)
   const saveRead = (ids) => { setReadIds(ids); localStorage.setItem('assetflow_read_notifications', JSON.stringify(ids)) }
   const markRead = (id) => saveRead(readIds.includes(id) ? readIds : [...readIds, id])
-  const markAll = () => saveRead(feed.notifications.map((item) => item.id))
-  const unread = feed.notifications.filter((item) => !readIds.includes(item.id)).length
-  const filteredNotifications = feed.notifications.filter((item) => (!showUnread || !readIds.includes(item.id)) && (type === 'All' || item.type === type) && [item.title, item.message, item.module, item.actor].some((value) => value.toLowerCase().includes(search.toLowerCase())))
-  const filteredLogs = feed.logs.filter((item) => (type === 'All' || item.type === type) && [item.action, item.actor, item.module, item.detail].some((value) => String(value).toLowerCase().includes(search.toLowerCase())))
+  const markAll = () => saveRead(notifications.map((item) => item.id))
+  const unread = notifications.filter((item) => !readIds.includes(item.id)).length
+  const filteredNotifications = notifications.filter((item) => (!showUnread || !readIds.includes(item.id)) && (type === 'All' || item.type === type) && [item.title, item.message, item.module, item.actor].some((value) => value.toLowerCase().includes(search.toLowerCase())))
+  const filteredLogs = logs.filter((item) => (type === 'All' || item.type === type) && [item.action, item.actor, item.module, item.detail].some((value) => String(value).toLowerCase().includes(search.toLowerCase())))
 
   return <div className="mx-auto max-w-[1500px] space-y-6">
     <div className="flex items-center justify-between"><div><p className="text-sm font-medium text-[#7a6475]">Updates & traceability</p><h1 className="mt-1 text-2xl font-bold text-[#31232e]">Activity Logs & Notifications</h1><p className="mt-2 text-sm text-slate-600">Stay informed about workflow updates and review who performed every recorded action.</p></div><div className="rounded-lg bg-[#f7f3f6] px-4 py-3 text-right"><p className="text-xs text-slate-500">Viewing as</p><p className="text-sm font-semibold text-[#4f3448]">{user?.role?.replaceAll('_', ' ')}</p></div></div>
-    <div className="grid grid-cols-4 gap-4">{[['Unread', unread, Bell], ['Critical Alerts', feed.notifications.filter((item) => item.priority === 'critical').length, ShieldAlert], ['Workflow Updates', feed.notifications.filter((item) => item.actor !== 'System').length, CheckCheck], ['Logged Actions', feed.logs.length, ClipboardCheck]].map(([label, value, Icon]) => <div key={label} className="rounded-xl border border-[#e6dee4] bg-white p-5 shadow-sm"><div className="flex justify-between"><div><p className="text-sm text-slate-500">{label}</p><p className="mt-2 text-3xl font-bold text-[#31232e]">{value}</p></div><div className="h-fit rounded-lg bg-[#f1eaf0] p-2.5 text-[#4f3448]"><Icon size={20}/></div></div></div>)}</div>
+    <div className="grid grid-cols-4 gap-4">{[['Unread', unread, Bell], ['Critical Alerts', notifications.filter((item) => item.priority === 'critical').length, ShieldAlert], ['Workflow Updates', notifications.filter((item) => item.actor !== 'System').length, CheckCheck], ['Logged Actions', logs.length, ClipboardCheck]].map(([label, value, Icon]) => <div key={label} className="rounded-xl border border-[#e6dee4] bg-white p-5 shadow-sm"><div className="flex justify-between"><div><p className="text-sm text-slate-500">{label}</p><p className="mt-2 text-3xl font-bold text-[#31232e]">{value}</p></div><div className="h-fit rounded-lg bg-[#f1eaf0] p-2.5 text-[#4f3448]"><Icon size={20}/></div></div></div>)}</div>
     <div className="grid grid-cols-2 gap-2 rounded-xl border border-[#e6dee4] bg-white p-2"><button className={`rounded-lg px-4 py-3 text-sm font-semibold ${tab === 'notifications' ? 'bg-[#4f3448] text-white' : 'text-slate-600'}`} onClick={() => setTab('notifications')}>Notifications {unread > 0 && <span className="ml-2 rounded-full bg-red-500 px-2 py-0.5 text-xs text-white">{unread}</span>}</button><button className={`rounded-lg px-4 py-3 text-sm font-semibold ${tab === 'activity' ? 'bg-[#4f3448] text-white' : 'text-slate-600'}`} onClick={() => setTab('activity')}>Full Activity Log</button></div>
     <section className="rounded-xl border border-[#e6dee4] bg-white shadow-sm"><div className="flex items-center gap-3 border-b border-[#e6dee4] p-5"><div className="relative flex-1"><Search className="absolute left-3 top-3 text-slate-400" size={18}/><input className="w-full rounded-lg border border-[#ddd3da] py-2.5 pl-10 pr-3 outline-none" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${tab === 'notifications' ? 'notifications' : 'activity logs'}...`}/></div><select className="rounded-lg border border-[#ddd3da] px-3 py-2.5 text-sm" value={type} onChange={(event) => setType(event.target.value)}><option>All</option><option value="asset">Assets</option><option value="maintenance">Maintenance</option><option value="booking">Bookings</option><option value="transfer">Transfers</option><option value="overdue">Overdue</option><option value="audit">Audits</option><option value="user">Users</option></select>{tab === 'notifications' && <><button className={`rounded-lg border px-3 py-2.5 text-sm ${showUnread ? 'border-[#4f3448] bg-[#f1eaf0] text-[#4f3448]' : 'border-[#ddd3da] text-slate-600'}`} onClick={() => setShowUnread(!showUnread)}>Unread only</button><button className="inline-flex items-center gap-2 rounded-lg bg-[#4f3448] px-3 py-2.5 text-sm font-medium text-white" onClick={markAll}><CheckCheck size={16}/>Mark all read</button></>}</div>
       {tab === 'notifications' ? <div className="divide-y divide-slate-100">{filteredNotifications.map((item) => { const Icon = iconMap[item.type] || Bell; const isRead = readIds.includes(item.id); return <button key={item.id} className={`flex w-full items-start gap-4 p-5 text-left hover:bg-[#fcfafb] ${isRead ? 'opacity-65' : ''}`} onClick={() => { markRead(item.id); setSelected(item) }}><div className={`rounded-lg p-2.5 ${colorMap[item.type]}`}><Icon size={19}/></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="font-semibold text-[#31232e]">{item.title}</p>{!isRead && <span className="h-2 w-2 rounded-full bg-[#4f3448]"/>}{item.priority === 'critical' && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-700">Critical</span>}</div><p className="mt-1 text-sm text-slate-600">{item.message}</p><p className="mt-2 text-xs text-slate-400">{item.module} · {item.actor}</p></div><span className="whitespace-nowrap text-xs text-slate-500">{item.time}</span></button>})}</div> : <ActivityTable rows={filteredLogs}/>} 

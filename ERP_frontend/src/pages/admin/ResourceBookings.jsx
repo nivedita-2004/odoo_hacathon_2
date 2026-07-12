@@ -116,7 +116,7 @@ const getStatus = (booking) => {
   return "Upcoming";
 };
 
-export default function ResourceBookings() {
+export default function ResourceBookings({ scopeDepartment = null, scopeBookedBy = null }) {
   const [bookings, setBookings] = useState(readBookings);
   const [resource, setResource] = useState("Meeting Room B2");
   const [date, setDate] = useState(todayString);
@@ -146,12 +146,15 @@ export default function ResourceBookings() {
       (item) =>
         item.resource === resource &&
         item.date === date &&
+        (!scopeDepartment || scopeBookedBy || item.department === scopeDepartment) &&
         getStatus(item) !== "Cancelled",
     )
     .sort((a, b) => a.start.localeCompare(b.start));
   const visible = useMemo(
     () =>
       bookings.filter((item) =>
+        (!scopeDepartment || item.department === scopeDepartment) &&
+        (!scopeBookedBy || item.bookedBy === scopeBookedBy) &&
         [
           item.id,
           item.resource,
@@ -160,16 +163,16 @@ export default function ResourceBookings() {
           item.department,
         ].some((value) => value.toLowerCase().includes(search.toLowerCase())),
       ),
-    [bookings, search],
+    [bookings, search, scopeDepartment, scopeBookedBy],
   );
-  const withStatuses = bookings.map((item) => ({
+  const withStatuses = bookings.filter((item) => (!scopeDepartment || item.department === scopeDepartment) && (!scopeBookedBy || item.bookedBy === scopeBookedBy)).map((item) => ({
     ...item,
     currentStatus: getStatus(item),
   }));
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({ ...emptyForm, resource, date });
+    setForm({ ...emptyForm, resource, date, department: scopeDepartment || "", bookedBy: scopeBookedBy || "" });
     setError("");
   };
   const openReschedule = (booking) => {
@@ -354,12 +357,12 @@ export default function ResourceBookings() {
                     top: Math.max(0, top),
                     height: Math.max(40, height),
                   }}
-                  onClick={() => openReschedule(item)}
+                  onClick={() => (!scopeBookedBy || item.bookedBy === scopeBookedBy) && openReschedule(item)}
                 >
-                  <strong>{item.title}</strong>
+                  <strong>{scopeBookedBy && item.bookedBy !== scopeBookedBy ? "Unavailable" : item.title}</strong>
                   <span className="mt-1 block">
                     {formatTime(item.start)}–{formatTime(item.end)} ·{" "}
-                    {item.bookedBy}
+                    {scopeBookedBy && item.bookedBy !== scopeBookedBy ? "Existing booking" : item.bookedBy}
                   </span>
                 </button>
               );
@@ -473,13 +476,15 @@ export default function ResourceBookings() {
           save={saveBooking}
           close={close}
           editing={Boolean(editingId)}
+          scopeDepartment={scopeDepartment}
+          scopeBookedBy={scopeBookedBy}
         />
       )}
     </div>
   );
 }
 
-function BookingModal({ form, error, update, save, close, editing }) {
+function BookingModal({ form, error, update, save, close, editing, scopeDepartment, scopeBookedBy }) {
   const input =
     "mt-2 w-full rounded-lg border border-[#ddd3da] px-3 py-2.5 outline-none focus:border-[#4f3448]";
   return (
@@ -517,6 +522,7 @@ function BookingModal({ form, error, update, save, close, editing }) {
           <Field label="Booking Title">
             <input
               required
+              disabled={Boolean(scopeBookedBy)}
               className={input}
               name="title"
               value={form.title}
@@ -535,6 +541,7 @@ function BookingModal({ form, error, update, save, close, editing }) {
           <Field label="Department">
             <select
               required
+              disabled={Boolean(scopeDepartment)}
               className={input}
               name="department"
               value={form.department}

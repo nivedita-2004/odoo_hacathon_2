@@ -1,4 +1,3 @@
-import P from "../common/PlaceholderPage";
-export default function Assets() {
-  return <P title="Asset Directory" />;
-}
+import Assets from '../admin/Assets'
+
+export default Assets

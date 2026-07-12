@@ -1,4 +1,3 @@
-import P from "../common/PlaceholderPage";
-export default function Allocations() {
-  return <P title="Allocations" />;
-}
+import AllocationTransfers from '../admin/AllocationTransfers'
+
+export default AllocationTransfers

@@ -1,4 +1,9 @@
-import P from "../common/PlaceholderPage";
+import ResourceBookings from "../admin/ResourceBookings";
+import useAuth from "../../hooks/useAuth";
+
 export default function Bookings() {
-  return <P title="Resource Bookings" />;
+  const { user } = useAuth();
+  return (
+    <ResourceBookings scopeDepartment={user?.department || "Unassigned"} />
+  );
 }

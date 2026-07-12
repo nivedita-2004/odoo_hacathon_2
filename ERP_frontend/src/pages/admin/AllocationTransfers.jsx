@@ -112,6 +112,7 @@ export default function AllocationTransfers() {
   const [allocations, setAllocations] = useState(() => readStored("assetflow_allocations", initialAllocations));
   const [transfers, setTransfers] = useState(() => readStored("assetflow_transfers", initialTransfers));
   const [returns, setReturns] = useState(() => readStored("assetflow_returns", []));
+  const [returnRequests, setReturnRequests] = useState(() => readStored("assetflow_return_requests", []));
   const [search, setSearch] = useState("");
   const [allocateForm, setAllocateForm] = useState(null);
   const [transferForm, setTransferForm] = useState(null);
@@ -141,6 +142,9 @@ export default function AllocationTransfers() {
   useEffect(() => {
     localStorage.setItem("assetflow_returns", JSON.stringify(returns));
   }, [returns]);
+  useEffect(() => {
+    localStorage.setItem("assetflow_return_requests", JSON.stringify(returnRequests));
+  }, [returnRequests]);
   const visible = useMemo(
     () =>
       active.filter((item) =>
@@ -291,6 +295,9 @@ export default function AllocationTransfers() {
       department: item.department,
       reason: "",
     });
+  const decideReturnRequest = (request, status) => {
+    setReturnRequests(returnRequests.map((item) => item.id === request.id ? { ...item, status } : item));
+  };
   const openConflictTransfer = () => {
     openTransfer(conflict);
     setAllocateForm(null);
@@ -420,7 +427,7 @@ export default function AllocationTransfers() {
         {tab === "transfers" && (
           <Transfers rows={transfers} approve={approve} />
         )}
-        {tab === "returns" && <Returns rows={returns} />}
+        {tab === "returns" && <Returns rows={returns} requests={returnRequests} decide={decideReturnRequest} />}
       </section>
       {allocateForm && (
         <AllocateModal
@@ -562,9 +569,11 @@ function Transfers({ rows, approve }) {
     </Table>
   );
 }
-function Returns({ rows }) {
+function Returns({ rows, requests, decide }) {
   return (
-    <Table
+    <><Table headers={["Request ID", "Asset", "Requested By", "Department", "Preferred Date", "Reason", "Status", "Action"]}>
+      {requests.map((item) => <tr key={item.id} className="border-b border-slate-100"><Cell strong>{item.id}</Cell><Cell>{item.assetName}<small>{item.assetTag}</small></Cell><Cell>{item.requestedBy}</Cell><Cell>{item.department}</Cell><Cell>{item.preferredDate}</Cell><Cell>{item.reason}</Cell><Cell><Badge type={item.status === "Approved" ? "success" : item.status === "Rejected" ? "danger" : "warning"}>{item.status}</Badge></Cell><Cell>{item.status === "Requested" && <><button className="mr-3 font-medium text-emerald-700" onClick={() => decide(item, "Approved")}>Approve</button><button className="font-medium text-red-700" onClick={() => decide(item, "Rejected")}>Reject</button></>}</Cell></tr>)}
+    </Table><h3 className="border-y border-[#e6dee4] bg-[#fcfafb] px-4 py-3 text-sm font-semibold text-[#31232e]">Completed Returns</h3><Table
       headers={[
         "Return ID",
         "Asset",
@@ -591,7 +600,7 @@ function Returns({ rows }) {
           </Cell>
         </tr>
       ))}
-    </Table>
+    </Table></>
   );
 }
 function Table({ headers, children }) {

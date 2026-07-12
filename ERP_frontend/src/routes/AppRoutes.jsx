@@ -15,29 +15,22 @@ import AdminBookings from "../pages/admin/ResourceBookings";
 import AdminMaintenance from "../pages/admin/Maintenance";
 import ManagerDashboard from "../pages/assetManager/Dashboard";
 import Assets from "../pages/assetManager/Assets";
-import RegisterAsset from "../pages/assetManager/RegisterAsset";
 import Allocations from "../pages/assetManager/Allocations";
-import ManagerTransfers from "../pages/assetManager/Transfers";
-import Returns from "../pages/assetManager/Returns";
 import ManagerBookings from "../pages/assetManager/Bookings";
 import ManagerMaintenance from "../pages/assetManager/Maintenance";
 import ManagerAudits from "../pages/assetManager/AuditAssignments";
+import ManagerReports from "../pages/assetManager/Reports";
 import HeadDashboard from "../pages/departmentHead/Dashboard";
 import DepartmentAssets from "../pages/departmentHead/DepartmentAssets";
-import DepartmentEmployees from "../pages/departmentHead/DepartmentEmployees";
 import AllocationRequests from "../pages/departmentHead/AllocationRequests";
-import HeadTransfers from "../pages/departmentHead/TransferRequests";
 import HeadBookings from "../pages/departmentHead/Bookings";
 import HeadMaintenance from "../pages/departmentHead/Maintenance";
 import HeadAudits from "../pages/departmentHead/AuditAssignments";
 import EmployeeDashboard from "../pages/employee/Dashboard";
 import MyAssets from "../pages/employee/MyAssets";
-import RequestAsset from "../pages/employee/RequestAsset";
-import BookResource from "../pages/employee/BookResource";
-import MyBookings from "../pages/employee/MyBookings";
+import EmployeeBookings from "../pages/employee/Bookings";
 import EmployeeMaintenance from "../pages/employee/Maintenance";
 import ReturnRequests from "../pages/employee/ReturnRequests";
-import EmployeeTransfers from "../pages/employee/TransferRequests";
 import Notifications from "../pages/common/Notifications";
 import Profile from "../pages/common/Profile";
 import Unauthorized from "../pages/errors/Unauthorized";
@@ -65,13 +58,11 @@ const roleRoutes = [
     routes: [
       ["asset-manager/dashboard", ManagerDashboard],
       ["asset-manager/assets", Assets],
-      ["asset-manager/assets/register", RegisterAsset],
-      ["asset-manager/allocations", Allocations],
-      ["asset-manager/transfers", ManagerTransfers],
-      ["asset-manager/returns", Returns],
+      ["asset-manager/allocations-transfers", Allocations],
       ["asset-manager/bookings", ManagerBookings],
       ["asset-manager/maintenance", ManagerMaintenance],
       ["asset-manager/audits", ManagerAudits],
+      ["asset-manager/reports", ManagerReports],
     ],
   },
   {
@@ -79,9 +70,7 @@ const roleRoutes = [
     routes: [
       ["department-head/dashboard", HeadDashboard],
       ["department-head/assets", DepartmentAssets],
-      ["department-head/employees", DepartmentEmployees],
-      ["department-head/allocation-requests", AllocationRequests],
-      ["department-head/transfer-requests", HeadTransfers],
+      ["department-head/allocations-transfers", AllocationRequests],
       ["department-head/bookings", HeadBookings],
       ["department-head/maintenance", HeadMaintenance],
       ["department-head/audits", HeadAudits],
@@ -92,12 +81,9 @@ const roleRoutes = [
     routes: [
       ["employee/dashboard", EmployeeDashboard],
       ["employee/my-assets", MyAssets],
-      ["employee/request-asset", RequestAsset],
-      ["employee/book-resource", BookResource],
-      ["employee/my-bookings", MyBookings],
+      ["employee/bookings", EmployeeBookings],
       ["employee/maintenance", EmployeeMaintenance],
-      ["employee/return-requests", ReturnRequests],
-      ["employee/transfer-requests", EmployeeTransfers],
+      ["employee/return-transfer-requests", ReturnRequests],
     ],
   },
 ];
