@@ -52,6 +52,7 @@ const getAdminDashboard = async (req, res) => {
 const getNotifications = async (req, res) => {
   try {
     const orgId = req.user.organization_id;
+    const userId = req.user.id;
     const [allocationsRes, transfersRes, returnsRes, maintenanceRes, bookingsRes, overdueRes, auditsRes, activitiesRes] = await Promise.all([
       db.query(queries.getNotificationsAllocations, [orgId]),
       db.query(queries.getNotificationsTransfers, [orgId]),
@@ -163,7 +164,10 @@ const getNotifications = async (req, res) => {
     notifications.sort((a, b) => new Date(b.time) - new Date(a.time));
     logs.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    res.status(200).json({ success: true, data: { notifications, logs } });
+    const readsRes = await db.query('SELECT notification_id FROM user_notification_reads WHERE user_id = $1', [userId]);
+    const readIds = readsRes.rows.map(r => r.notification_id);
+
+    res.status(200).json({ success: true, data: { notifications, logs, readIds } });
   } catch (error) {
     console.error('Error fetching notifications:', error);
     res.status(500).json({ success: false, error: 'Server Error' });

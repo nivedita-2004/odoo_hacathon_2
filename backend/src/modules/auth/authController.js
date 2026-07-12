@@ -117,12 +117,19 @@ const verifyRegistrationOtp = async (req, res) => {
       });
     }
 
-    // Otherwise, log them into their organization
-    const tokenPayload = { user: { id: user.id, organization_id: user.organization_id, employee_id: user.employee_id } };
-    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1d' });
-
     const fullUserCheck = await client.query(queries.getUserByEmailAndOrg, [user.email, user.organization_id]);
     const fullUser = fullUserCheck.rows[0] || user;
+
+    // Log them into their organization
+    const tokenPayload = { 
+      user: { 
+        id: fullUser.id, 
+        organization_id: fullUser.organization_id, 
+        employee_id: fullUser.employee_id, 
+        role: fullUser.computed_role 
+      } 
+    };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1d' });
 
     res.status(200).json({
       success: true,
@@ -157,6 +164,10 @@ const login = async (req, res) => {
 
     if (!isMatch) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    }
+
+    if (user.status === 'PENDING_VERIFICATION') {
+      return res.status(403).json({ success: false, error: 'Please verify your email via the OTP sent to you before logging in.' });
     }
 
     const workspacesRes = await db.query(queries.getWorkspacesByEmail, [email.trim().toLowerCase()]);
@@ -240,7 +251,7 @@ const googleSelectWorkspace = async (req, res) => {
     const user = userRes.rows[0];
     if (!user) return res.status(401).json({ success: false, error: 'User not in this organization' });
 
-    const tokenPayload = { user: { id: user.id, organization_id: user.organization_id, employee_id: user.employee_id } };
+    const tokenPayload = { user: { id: user.id, organization_id: user.organization_id, employee_id: user.employee_id, role: user.computed_role || 'ADMIN' } };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1d' });
 
     return res.status(200).json({
@@ -277,7 +288,7 @@ const googleCreateWorkspace = async (req, res) => {
 
     await client.query('COMMIT');
 
-    const tokenPayload = { user: { id: user.id, organization_id: user.organization_id, employee_id: user.employee_id } };
+    const tokenPayload = { user: { id: user.id, organization_id: user.organization_id, employee_id: user.employee_id, role: 'ADMIN' } };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1d' });
 
     res.status(201).json({
@@ -337,7 +348,7 @@ const createWorkspace = async (req, res) => {
 
     await client.query('COMMIT');
 
-    const tokenPayload = { user: { id: user.id, organization_id: orgId, employee_id: user.employee_id } };
+    const tokenPayload = { user: { id: user.id, organization_id: orgId, employee_id: user.employee_id, role: 'ADMIN' } };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1d' });
 
     res.status(201).json({
@@ -364,7 +375,7 @@ const selectWorkspace = async (req, res) => {
     const user = userRes.rows[0];
     if (!user) return res.status(401).json({ success: false, error: 'User not in this organization' });
 
-    const tokenPayload = { user: { id: user.id, organization_id: user.organization_id, employee_id: user.employee_id } };
+    const tokenPayload = { user: { id: user.id, organization_id: user.organization_id, employee_id: user.employee_id, role: user.computed_role } };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '1d' });
 
     return res.status(200).json({

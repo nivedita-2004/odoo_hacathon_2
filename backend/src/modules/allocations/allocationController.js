@@ -1,5 +1,6 @@
 const db = require('../../config/db');
 const queries = require('./allocationQueries');
+const { logAudit } = require('../../utils/auditLogger');
 
 const getActiveAllocations = async (req, res) => {
   try {
@@ -36,6 +37,16 @@ const allocateAsset = async (req, res) => {
     await client.query(queries.updateAssetStatus, [
       'Allocated', targetEmployeeId, targetDepartmentId, asset_id, orgId
     ]);
+
+    await logAudit({
+      action: 'ALLOCATED',
+      entityType: 'ALLOCATION',
+      entityId: asset_id,
+      userId,
+      orgId,
+      newData: { employee_id: targetEmployeeId, department_id: targetDepartmentId },
+      client
+    });
 
     await client.query('COMMIT');
     res.status(201).json({ success: true, message: 'Asset allocated successfully' });

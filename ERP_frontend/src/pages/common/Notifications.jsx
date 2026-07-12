@@ -22,6 +22,7 @@ export default function Notifications({ initialTab = 'notifications' }) {
         const json = await response.json()
         if (json.success) {
           setFeed({ notifications: json.data.notifications || [], logs: json.data.logs || [] })
+          setReadIds(json.data.readIds || [])
         } else {
           setFetchError(json.error || 'Unable to load notifications')
         }
@@ -45,17 +46,33 @@ export default function Notifications({ initialTab = 'notifications' }) {
   const [search, setSearch] = useState('')
   const [type, setType] = useState('All')
   const [showUnread, setShowUnread] = useState(false)
-  const [readIds, setReadIds] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('assetflow_read_notifications')) || []
-    } catch {
-      return []
-    }
-  })
+  const [readIds, setReadIds] = useState([])
   const [selected, setSelected] = useState(null)
-  const saveRead = (ids) => { setReadIds(ids); localStorage.setItem('assetflow_read_notifications', JSON.stringify(ids)) }
-  const markRead = (id) => saveRead(readIds.includes(id) ? readIds : [...readIds, id])
-  const markAll = () => saveRead(notifications.map((item) => item.id))
+  
+  const saveRead = async (ids, idToMark = null, all = false) => { 
+    setReadIds(ids); 
+    const token = localStorage.getItem('assetflow_token');
+    
+    try {
+      if (all) {
+        await fetch(API_ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ notificationIds: ids })
+        });
+      } else if (idToMark) {
+        await fetch(API_ENDPOINTS.NOTIFICATIONS.MARK_READ(idToMark), {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to save read state', err);
+    }
+  }
+  
+  const markRead = (id) => saveRead(readIds.includes(id) ? readIds : [...readIds, id], id)
+  const markAll = () => saveRead(notifications.map((item) => item.id), null, true)
   const unread = notifications.filter((item) => !readIds.includes(item.id)).length
   const filteredNotifications = notifications.filter((item) => (!showUnread || !readIds.includes(item.id)) && (type === 'All' || item.type === type) && [item.title, item.message, item.module, item.actor].some((value) => value.toLowerCase().includes(search.toLowerCase())))
   const filteredLogs = logs.filter((item) => (type === 'All' || item.type === type) && [item.action, item.actor, item.module, item.detail].some((value) => String(value).toLowerCase().includes(search.toLowerCase())))

@@ -27,6 +27,10 @@ export const API_ENDPOINTS = {
     ADMIN: `${BASE_URL}/dashboard/admin`,
     NOTIFICATIONS: `${BASE_URL}/dashboard/notifications`,
   },
+  NOTIFICATIONS: {
+    MARK_READ: (id) => `${BASE_URL}/notifications/${id}/read`,
+    MARK_ALL_READ: `${BASE_URL}/notifications/read-all`,
+  },
   ORGANIZATION: {
     SETUP: `${BASE_URL}/organization/setup`,
     BRANCHES: `${BASE_URL}/organization/branches`,

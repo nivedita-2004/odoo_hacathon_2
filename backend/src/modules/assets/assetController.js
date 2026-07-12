@@ -4,6 +4,7 @@ const qrcode = require('qrcode');
 const { cloudinary } = require('../../utils/cloudinary');
 const { parse } = require('csv-parse/sync');
 const { stringify } = require('csv-stringify/sync');
+const { logAudit } = require('../../utils/auditLogger');
 
 const getMetadata = async (req, res) => {
   try {
@@ -48,6 +49,16 @@ const createAsset = async (req, res) => {
       current_department_id, current_employee_id
     } = req.body;
 
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Asset name is required and must be a string' });
+    }
+    if (!asset_tag || typeof asset_tag !== 'string' || asset_tag.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Asset tag is required and must be a string' });
+    }
+    if (!status_id || !condition_id) {
+      return res.status(400).json({ success: false, error: 'Status and Condition are required' });
+    }
+
     await client.query('BEGIN');
 
     // Default to the first subcategory if not provided
@@ -83,6 +94,16 @@ const createAsset = async (req, res) => {
 
     // Save QR Code URL
     await client.query(queries.saveQRCode, [orgId, assetId, qrData, qrCodeUrl]);
+
+    await logAudit({
+      action: 'CREATED',
+      entityType: 'ASSET',
+      entityId: assetId,
+      userId: req.user.id,
+      orgId,
+      newData: { name, asset_tag, status_id },
+      client
+    });
 
     await client.query('COMMIT');
     res.status(201).json({ success: true, data: { id: assetId, qrCodeUrl } });

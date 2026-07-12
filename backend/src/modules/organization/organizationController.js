@@ -1,5 +1,6 @@
 const db = require('../../config/db');
 const queries = require('./organizationQueries');
+const { sendWelcomeEmail } = require('../../utils/emailService');
 
 const getSetup = async (req, res) => {
   try {
@@ -93,7 +94,6 @@ const saveCategory = async (req, res) => {
   }
 };
 
-const { sendWelcomeEmail } = require('../../utils/emailService');
 
 const saveEmployee = async (req, res) => {
   const client = await db.pool.connect();
