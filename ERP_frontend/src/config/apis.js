@@ -68,5 +68,8 @@ export const API_ENDPOINTS = {
     AUDITORS: `${BASE_URL}/audits/auditors`,
     VERIFY: (id) => `${BASE_URL}/audits/${id}/verify`,
     CLOSE: (id) => `${BASE_URL}/audits/${id}/close`,
+  },
+  REPORTS: {
+    BASE: `${BASE_URL}/reports`,
   }
 };
