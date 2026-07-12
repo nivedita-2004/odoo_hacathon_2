@@ -1,5 +1,6 @@
 const db = require('../../config/db');
 const queries = require('./bookingQueries');
+const { logAudit } = require('../../utils/auditLogger');
 
 const getResources = async (req, res) => {
   try {
@@ -21,13 +22,13 @@ const addResource = async (req, res) => {
     if (!asset_id) return res.status(400).json({ success: false, error: 'Asset ID is required' });
 
     // Ensure asset belongs to org
-    const assetCheck = await db.query('SELECT id FROM assets WHERE id = $1 AND organization_id = $2', [asset_id, orgId]);
+    const assetCheck = await db.query(queries.checkAssetExists, [asset_id, orgId]);
     if (assetCheck.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Asset not found' });
     }
 
     // Ensure it's not already a resource
-    const existCheck = await db.query('SELECT id FROM booking_resources WHERE asset_id = $1', [asset_id]);
+    const existCheck = await db.query(queries.checkResourceExists, [asset_id]);
     if (existCheck.rows.length > 0) {
       return res.status(400).json({ success: false, error: 'Asset is already a bookable resource' });
     }
@@ -35,6 +36,15 @@ const addResource = async (req, res) => {
     await db.query(queries.addResource, [
       orgId, asset_id, max_duration_hours || null, requires_approval || false, userId
     ]);
+
+    await logAudit({
+      action: 'CREATED',
+      entityType: 'BOOKING_RESOURCE',
+      entityId: asset_id,
+      userId,
+      orgId,
+      newData: { max_duration_hours, requires_approval }
+    });
 
     res.status(201).json({ success: true, message: 'Resource added successfully' });
   } catch (error) {
@@ -85,6 +95,15 @@ const createBooking = async (req, res) => {
       orgId, resource_id, title, userId, start_time, end_time, reminder_minutes || 0
     ]);
 
+    await logAudit({
+      action: 'CREATED',
+      entityType: 'BOOKING',
+      entityId: result.rows[0].id,
+      userId,
+      orgId,
+      newData: { resource_id, title, start_time, end_time }
+    });
+
     res.status(201).json({ success: true, data: { id: result.rows[0].id } });
   } catch (error) {
     console.error('Error creating booking:', error);
@@ -120,6 +139,15 @@ const updateBooking = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Booking not found' });
     }
 
+    await logAudit({
+      action: 'UPDATED',
+      entityType: 'BOOKING',
+      entityId: id,
+      userId,
+      orgId,
+      newData: { title, start_time, end_time, reminder_minutes }
+    });
+
     res.status(200).json({ success: true, message: 'Booking updated' });
   } catch (error) {
     console.error('Error updating booking:', error);
@@ -140,6 +168,14 @@ const cancelBooking = async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, error: 'Booking not found' });
     }
+
+    await logAudit({
+      action: 'CANCELLED',
+      entityType: 'BOOKING',
+      entityId: id,
+      userId,
+      orgId
+    });
 
     res.status(200).json({ success: true, message: 'Booking cancelled' });
   } catch (error) {

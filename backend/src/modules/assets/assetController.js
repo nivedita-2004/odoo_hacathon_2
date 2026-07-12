@@ -64,7 +64,7 @@ const createAsset = async (req, res) => {
     // Default to the first subcategory if not provided
     let finalSubId = subcategory_id;
     if (!finalSubId && category_id) {
-       const subRes = await client.query('SELECT id FROM asset_subcategories WHERE category_id = $1 LIMIT 1', [category_id]);
+       const subRes = await client.query(queries.getSubcategoryLimitOne, [category_id]);
        if (subRes.rows.length > 0) finalSubId = subRes.rows[0].id;
     }
 

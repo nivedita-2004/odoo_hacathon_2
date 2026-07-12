@@ -1,4 +1,5 @@
 const db = require('../../config/db');
+const queries = require('./notificationsQueries');
 
 const getNotifications = async (req, res) => {
   // Now handled in dashboardController for synthetic generation
@@ -10,7 +11,7 @@ const markAsRead = async (req, res) => {
     const userId = req.user.id;
     const { id } = req.params; // The synthetic notification id
     await db.query(
-      'INSERT INTO user_notification_reads (user_id, notification_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      queries.markNotificationAsRead,
       [userId, id]
     );
     res.status(200).json({ success: true, message: 'Notification marked as read' });
@@ -28,7 +29,7 @@ const markAllAsRead = async (req, res) => {
       // Very basic bulk insert loop for MVP
       for (const id of notificationIds) {
         await db.query(
-          'INSERT INTO user_notification_reads (user_id, notification_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          queries.markNotificationAsRead,
           [userId, id]
         );
       }

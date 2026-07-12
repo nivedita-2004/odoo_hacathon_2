@@ -1,5 +1,6 @@
 const db = require('../../config/db');
 const queries = require('./maintenanceQueries');
+const { logAudit } = require('../../utils/auditLogger');
 
 const getRequests = async (req, res) => {
   try {
@@ -60,6 +61,15 @@ const createRequest = async (req, res) => {
     await db.query(queries.createLog, [
       orgId, requestId, null, `Request raised. Priority: ${priority || 'Medium'}`, userId
     ]);
+
+    await logAudit({
+      action: 'CREATED',
+      entityType: 'MAINTENANCE',
+      entityId: requestId,
+      userId,
+      orgId,
+      newData: { asset_id, issue_description, priority }
+    });
     
     await db.query('COMMIT');
     res.status(201).json({ success: true, data: { id: requestId } });
@@ -96,6 +106,14 @@ const approveRequest = async (req, res) => {
     await db.query(queries.createLog, [
       orgId, id, null, 'Approved by Asset Manager. Asset moved to Under Maintenance.', userId
     ]);
+
+    await logAudit({
+      action: 'APPROVED',
+      entityType: 'MAINTENANCE',
+      entityId: id,
+      userId,
+      orgId
+    });
     
     await db.query('COMMIT');
     res.status(200).json({ success: true });
@@ -123,6 +141,14 @@ const rejectRequest = async (req, res) => {
     await db.query(queries.createLog, [
       orgId, id, null, 'Rejected by Asset Manager. Request closed.', userId
     ]);
+
+    await logAudit({
+      action: 'REJECTED',
+      entityType: 'MAINTENANCE',
+      entityId: id,
+      userId,
+      orgId
+    });
     
     await db.query('COMMIT');
     res.status(200).json({ success: true });
@@ -158,6 +184,15 @@ const assignTechnician = async (req, res) => {
     await db.query(queries.createLog, [
       orgId, id, taskId, `Technician assigned: ${engineer_name}`, userId
     ]);
+
+    await logAudit({
+      action: 'ASSIGNED',
+      entityType: 'MAINTENANCE',
+      entityId: id,
+      userId,
+      orgId,
+      newData: { engineer_id, engineer_name }
+    });
     
     await db.query('COMMIT');
     res.status(200).json({ success: true });
@@ -185,6 +220,14 @@ const startWork = async (req, res) => {
     await db.query(queries.createLog, [
       orgId, id, null, 'Work started on asset.', userId
     ]);
+
+    await logAudit({
+      action: 'IN_PROGRESS',
+      entityType: 'MAINTENANCE',
+      entityId: id,
+      userId,
+      orgId
+    });
     
     await db.query('COMMIT');
     res.status(200).json({ success: true });
@@ -215,6 +258,15 @@ const resolveRequest = async (req, res) => {
     await db.query(queries.createLog, [
       orgId, id, null, `Resolved: ${resolution}`, userId
     ]);
+
+    await logAudit({
+      action: 'RESOLVED',
+      entityType: 'MAINTENANCE',
+      entityId: id,
+      userId,
+      orgId,
+      newData: { resolution }
+    });
     
     await db.query('COMMIT');
     res.status(200).json({ success: true });

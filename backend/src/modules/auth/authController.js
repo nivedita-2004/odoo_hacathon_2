@@ -30,7 +30,7 @@ const register = async (req, res) => {
       userId = userCheck.rows[0].id;
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(password, salt);
-      await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
+      await client.query(queries.updateUserPassword, [passwordHash, userId]);
     } else {
       const nameParts = fullName.trim().split(' ');
       const firstName = nameParts[0];
@@ -44,7 +44,7 @@ const register = async (req, res) => {
       const employeeId = empResult.rows[0].id;
 
       // Create new pending user with no organization
-      const userResult = await client.query("INSERT INTO users (employee_id, email, password_hash, status) VALUES ($1, $2, $3, 'PENDING_VERIFICATION') RETURNING id", [
+      const userResult = await client.query(queries.createPendingUserNoOrg, [
         employeeId, email.trim().toLowerCase(), passwordHash
       ]);
       userId = userResult.rows[0].id;
@@ -55,10 +55,10 @@ const register = async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60000); // 10 mins
 
     // Clear old OTPs for this user
-    await client.query('DELETE FROM otp WHERE user_id = $1', [userId]);
+    await client.query(queries.deleteUserOTP, [userId]);
 
     // Insert new OTP
-    await client.query('INSERT INTO otp (user_id, code, expires_at) VALUES ($1, $2, $3)', [userId, otpCode, expiresAt]);
+    await client.query(queries.createUserOTP, [userId, otpCode, expiresAt]);
 
     await client.query('COMMIT');
 
@@ -84,7 +84,7 @@ const verifyRegistrationOtp = async (req, res) => {
     await client.query('BEGIN');
 
     // Find pending user
-    const userCheck = await client.query("SELECT * FROM users WHERE email = $1 AND status = 'PENDING_VERIFICATION'", [email.trim().toLowerCase()]);
+    const userCheck = await client.query(queries.getPendingUserByEmail, [email.trim().toLowerCase()]);
     if (userCheck.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ success: false, error: 'Registration session not found or already verified.' });
@@ -92,17 +92,17 @@ const verifyRegistrationOtp = async (req, res) => {
     const user = userCheck.rows[0];
 
     // Verify OTP
-    const otpCheck = await client.query("SELECT * FROM otp WHERE user_id = $1 AND code = $2 AND used = false AND expires_at > CURRENT_TIMESTAMP", [user.id, otp]);
+    const otpCheck = await client.query(queries.getValidOTP, [user.id, otp]);
     if (otpCheck.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ success: false, error: 'Invalid or expired OTP' });
     }
 
     // Mark used
-    await client.query('UPDATE otp SET used = true WHERE id = $1', [otpCheck.rows[0].id]);
+    await client.query(queries.markOTPUsed, [otpCheck.rows[0].id]);
 
     // Activate User
-    await client.query("UPDATE users SET status = 'ACTIVE' WHERE id = $1", [user.id]);
+    await client.query(queries.activateUser, [user.id]);
 
     await client.query('COMMIT');
 
@@ -315,7 +315,7 @@ const createWorkspace = async (req, res) => {
     await client.query('BEGIN');
 
     // Get the unaffiliated user
-    const userRes = await client.query('SELECT u.*, e.first_name, e.last_name FROM users u LEFT JOIN employees e ON u.employee_id = e.id WHERE u.email = $1 AND u.deleted_at IS NULL LIMIT 1', [email]);
+    const userRes = await client.query(queries.getUserWithEmployeeByEmail, [email]);
     const user = userRes.rows[0];
 
     if (!user) {
@@ -334,17 +334,17 @@ const createWorkspace = async (req, res) => {
 
     // Update Employee with orgId
     if (user.employee_id) {
-      await client.query('UPDATE employees SET organization_id = $1 WHERE id = $2', [orgId, user.employee_id]);
+      await client.query(queries.updateEmployeeOrg, [orgId, user.employee_id]);
     } else {
        // if no employee record for some reason (e.g. google auth that didn't create one)
        const empRes = await client.query(queries.createEmployee, [orgId, user.first_name || '', user.last_name || '', email, 'ADMIN']);
        const employeeId = empRes.rows[0].id;
-       await client.query('UPDATE users SET employee_id = $1 WHERE id = $2', [employeeId, user.id]);
+       await client.query(queries.updateUserEmployeeId, [employeeId, user.id]);
        user.employee_id = employeeId;
     }
 
     // Update User with orgId
-    await client.query('UPDATE users SET organization_id = $1 WHERE id = $2', [orgId, user.id]);
+    await client.query(queries.updateUserOrg, [orgId, user.id]);
 
     await client.query('COMMIT');
 

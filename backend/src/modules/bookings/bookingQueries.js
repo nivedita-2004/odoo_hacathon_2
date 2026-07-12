@@ -88,6 +88,16 @@ const cancelBooking = `
   RETURNING id;
 `;
 
+const checkAssetExists = `
+  SELECT id FROM assets 
+  WHERE id = $1 AND organization_id = $2
+`;
+
+const checkResourceExists = `
+  SELECT id FROM booking_resources 
+  WHERE asset_id = $1
+`;
+
 module.exports = {
   getBookableResources,
   addResource,
@@ -95,5 +105,7 @@ module.exports = {
   checkOverlap,
   createBooking,
   updateBooking,
-  cancelBooking
+  cancelBooking,
+  checkAssetExists,
+  checkResourceExists
 };

@@ -88,6 +88,16 @@ const returnAsset = async (req, res) => {
     ]);
 
     await client.query('COMMIT');
+    
+    await logAudit({
+      action: 'RETURNED',
+      entityType: 'ALLOCATION',
+      entityId: allocation_id,
+      userId,
+      orgId,
+      newData: { notes, condition }
+    });
+
     res.status(200).json({ success: true, message: 'Asset returned successfully' });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -126,9 +136,18 @@ const requestTransfer = async (req, res) => {
     }
     const sourceDept = activeAlloc.rows[0].department_id;
 
-    await db.query(queries.createTransfer, [
+    const transferRes = await db.query(queries.createTransfer, [
       orgId, asset_id, sourceDept, destination_department_id, userId, reason
     ]);
+
+    await logAudit({
+      action: 'REQUESTED',
+      entityType: 'TRANSFER',
+      entityId: transferRes.rows[0].id,
+      userId,
+      orgId,
+      newData: { asset_id, destination_department_id, reason }
+    });
 
     res.status(201).json({ success: true, message: 'Transfer requested successfully' });
   } catch (error) {
@@ -182,6 +201,15 @@ const approveTransfer = async (req, res) => {
     ]);
 
     await client.query('COMMIT');
+
+    await logAudit({
+      action: 'APPROVED',
+      entityType: 'TRANSFER',
+      entityId: id,
+      userId,
+      orgId
+    });
+
     res.status(200).json({ success: true, message: 'Transfer approved successfully' });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -205,6 +233,14 @@ const rejectTransfer = async (req, res) => {
     if (transferRes.rowCount === 0) {
       return res.status(404).json({ success: false, error: 'Transfer request not found' });
     }
+
+    await logAudit({
+      action: 'REJECTED',
+      entityType: 'TRANSFER',
+      entityId: id,
+      userId,
+      orgId
+    });
 
     res.status(200).json({ success: true, message: 'Transfer request rejected' });
   } catch (error) {
@@ -234,9 +270,18 @@ const createAllocationRequest = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Department, category, and reason are required' });
     }
 
-    await db.query(queries.createAllocationRequest, [
+    const reqRes = await db.query(queries.createAllocationRequest, [
       orgId, employeeId, department_id, category_name, preferred_asset_id || null, reason
     ]);
+
+    await logAudit({
+      action: 'REQUESTED',
+      entityType: 'ALLOCATION_REQUEST',
+      entityId: reqRes.rows[0].id,
+      userId: req.user.id,
+      orgId,
+      newData: { department_id, category_name, preferred_asset_id, reason }
+    });
 
     res.status(201).json({ success: true, message: 'Allocation requested successfully' });
   } catch (error) {
@@ -282,6 +327,16 @@ const approveAllocationRequest = async (req, res) => {
     ]);
 
     await client.query('COMMIT');
+
+    await logAudit({
+      action: 'APPROVED',
+      entityType: 'ALLOCATION_REQUEST',
+      entityId: id,
+      userId,
+      orgId,
+      newData: { allocated_asset_id }
+    });
+
     res.status(200).json({ success: true, message: 'Allocation request approved successfully' });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -305,6 +360,14 @@ const rejectAllocationRequest = async (req, res) => {
     if (reqRes.rowCount === 0) {
       return res.status(404).json({ success: false, error: 'Allocation request not found' });
     }
+
+    await logAudit({
+      action: 'REJECTED',
+      entityType: 'ALLOCATION_REQUEST',
+      entityId: id,
+      userId,
+      orgId
+    });
 
     res.status(200).json({ success: true, message: 'Allocation request rejected' });
   } catch (error) {

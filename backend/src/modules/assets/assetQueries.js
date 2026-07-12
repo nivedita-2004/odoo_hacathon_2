@@ -73,10 +73,15 @@ const saveQRCode = `
   INSERT INTO asset_qr_codes (organization_id, asset_id, qr_data, qr_image_url) VALUES ($1, $2, $3, $4) RETURNING id;
 `;
 
+const getSubcategoryLimitOne = `
+  SELECT id FROM asset_subcategories WHERE category_id = $1 LIMIT 1
+`;
+
 module.exports = {
   getMetadata,
   getAssets,
   getAssetById,
   createAsset,
-  saveQRCode
+  saveQRCode,
+  getSubcategoryLimitOne
 };

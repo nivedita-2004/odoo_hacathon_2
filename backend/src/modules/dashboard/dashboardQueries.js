@@ -218,6 +218,12 @@ const getActivityLogs = `
   LIMIT 5;
 `;
 
+const getUserNotificationReads = `
+  SELECT notification_id 
+  FROM user_notification_reads 
+  WHERE user_id = $1
+`;
+
 module.exports = {
   getAssets,
   getAllocations,
@@ -233,5 +239,6 @@ module.exports = {
   getNotificationsBookings,
   getNotificationsAudits,
   getEmployees,
-  getActivityLogs
+  getActivityLogs,
+  getUserNotificationReads
 };

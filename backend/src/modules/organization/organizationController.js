@@ -116,7 +116,7 @@ const saveEmployee = async (req, res) => {
 
       // Create PENDING user record for hassle-free login
       await client.query(
-        "INSERT INTO users (organization_id, employee_id, email, password_hash, status) VALUES ($1, $2, $3, $4, 'PENDING_VERIFICATION')",
+        queries.createPendingUser,
         [orgId, employeeId, cleanEmail, 'temp_hash_' + Date.now()]
       );
 
@@ -240,12 +240,12 @@ const savePermission = async (req, res) => {
   try {
     const { name, description } = req.body;
     // Permissions are system-wide, but we allow creating them dynamically here
-    const check = await db.query('SELECT id FROM permissions WHERE name = $1', [name]);
+    const check = await db.query(queries.checkPermissionExists, [name]);
     let result;
     if (check.rows.length === 0) {
       result = await db.query(queries.createPermission, [name, description || '']);
     } else {
-      result = await db.query('UPDATE permissions SET description = $2 WHERE name = $1 RETURNING *', [name, description || '']);
+      result = await db.query(queries.updatePermission, [name, description || '']);
     }
     res.status(200).json({ success: true, data: result.rows[0] });
   } catch (error) {

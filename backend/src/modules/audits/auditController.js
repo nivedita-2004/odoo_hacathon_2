@@ -1,5 +1,6 @@
 const db = require('../../config/db');
 const queries = require('./auditQueries');
+const { logAudit } = require('../../utils/auditLogger');
 
 const getAudits = async (req, res) => {
   try {
@@ -56,6 +57,15 @@ const createAudit = async (req, res) => {
       auditId, `Audit cycle created. ${assets.rows.length} assets in scope.`, userId
     ]);
 
+    await logAudit({
+      action: 'CREATED',
+      entityType: 'AUDIT',
+      entityId: auditId,
+      userId,
+      orgId,
+      newData: { name, department_id, scheduled_date, assigned_to }
+    });
+
     await db.query('COMMIT');
     res.status(201).json({ success: true, data: { id: auditId, assets_count: assets.rows.length } });
   } catch (error) {
@@ -89,6 +99,15 @@ const verifyAsset = async (req, res) => {
     await db.query(queries.createAuditLog, [
       audit_id, `Asset verified as ${status}${notes ? ': ' + notes : ''}`, userId
     ]);
+
+    await logAudit({
+      action: 'VERIFIED',
+      entityType: 'AUDIT_ASSET',
+      entityId: audit_asset_id,
+      userId,
+      orgId,
+      newData: { status, notes }
+    });
 
     await db.query('COMMIT');
     res.status(200).json({ success: true });
@@ -136,6 +155,15 @@ const closeAudit = async (req, res) => {
     await db.query(queries.createAuditLog, [
       audit_id, `Audit closed. ${found}/${total} verified. ${missing} missing, ${damaged} damaged.`, userId
     ]);
+
+    await logAudit({
+      action: 'CLOSED',
+      entityType: 'AUDIT',
+      entityId: audit_id,
+      userId,
+      orgId,
+      newData: { total, found, missing, damaged }
+    });
 
     await db.query('COMMIT');
     res.status(200).json({ success: true });

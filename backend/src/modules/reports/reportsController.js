@@ -1,17 +1,12 @@
 const db = require('../../config/db');
+const queries = require('./reportsQueries');
 
 const getReportData = async (req, res) => {
   try {
     const orgId = req.user.organization_id;
 
     // 1. Asset Utilization - counts by status
-    const assetsByStatus = await db.query(`
-      SELECT s.name as status, COUNT(*) as count
-      FROM assets a
-      JOIN asset_status s ON a.status_id = s.id
-      WHERE a.organization_id = $1 AND a.deleted_at IS NULL
-      GROUP BY s.name
-    `, [orgId]);
+    const assetsByStatus = await db.query(queries.getAssetsByStatus, [orgId]);
 
     const totalAssets = assetsByStatus.rows.reduce((sum, r) => sum + parseInt(r.count), 0);
     const allocatedCount = assetsByStatus.rows
@@ -20,24 +15,10 @@ const getReportData = async (req, res) => {
     const utilization = totalAssets > 0 ? Math.round((allocatedCount / totalAssets) * 100) : 0;
 
     // 2. Department allocation breakdown
-    const departmentAllocation = await db.query(`
-      SELECT d.name, COUNT(a.id) as value
-      FROM assets a
-      JOIN departments d ON a.current_department_id = d.id
-      WHERE a.organization_id = $1 AND a.deleted_at IS NULL
-      GROUP BY d.name
-      ORDER BY value DESC
-    `, [orgId]);
+    const departmentAllocation = await db.query(queries.getDepartmentAllocation, [orgId]);
 
     // 3. Maintenance stats
-    const maintenanceStats = await db.query(`
-      SELECT 
-        mr.status,
-        COUNT(*) as count
-      FROM maintenance_requests mr
-      WHERE mr.organization_id = $1
-      GROUP BY mr.status
-    `, [orgId]);
+    const maintenanceStats = await db.query(queries.getMaintenanceStats, [orgId]);
 
     const totalMaintenance = maintenanceStats.rows.reduce((sum, r) => sum + parseInt(r.count), 0);
     const unresolvedMaintenance = maintenanceStats.rows
@@ -46,60 +27,19 @@ const getReportData = async (req, res) => {
     const maintenanceRate = totalMaintenance > 0 ? Math.round((unresolvedMaintenance / totalMaintenance) * 100) : 0;
 
     // 4. Active bookings count
-    const activeBookings = await db.query(`
-      SELECT COUNT(*) as count
-      FROM bookings
-      WHERE organization_id = $1
-        AND status != 'Cancelled'
-        AND end_time > NOW()
-    `, [orgId]);
+    const activeBookings = await db.query(queries.getActiveBookings, [orgId]);
 
     // 5. Active allocations count
-    const activeAllocations = await db.query(`
-      SELECT COUNT(*) as count
-      FROM asset_allocations
-      WHERE organization_id = $1
-        AND actual_return_date IS NULL
-    `, [orgId]);
+    const activeAllocations = await db.query(queries.getActiveAllocations, [orgId]);
 
     // 6. Maintenance by priority for chart
-    const maintenanceByPriority = await db.query(`
-      SELECT 
-        mr.priority as category,
-        COUNT(*) as requests,
-        COUNT(*) FILTER (WHERE mr.status = 'Resolved') as resolved
-      FROM maintenance_requests mr
-      WHERE mr.organization_id = $1
-      GROUP BY mr.priority
-      ORDER BY requests DESC
-    `, [orgId]);
+    const maintenanceByPriority = await db.query(queries.getMaintenanceByPriority, [orgId]);
 
     // 7. Most used / idle assets (by booking count)
-    const assetUsage = await db.query(`
-      SELECT 
-        ast.name, 
-        COUNT(b.id) as uses,
-        CASE WHEN COUNT(b.id) > 2 THEN 'Most Used' ELSE 'Idle' END as type
-      FROM booking_resources br
-      JOIN assets ast ON br.asset_id = ast.id
-      LEFT JOIN bookings b ON b.resource_id = br.id AND b.status != 'Cancelled'
-      WHERE br.organization_id = $1
-      GROUP BY ast.name
-      ORDER BY uses DESC
-      LIMIT 10
-    `, [orgId]);
+    const assetUsage = await db.query(queries.getAssetUsage, [orgId]);
 
     // 8. Booking heatmap (hour-of-day by day-of-week)
-    const bookingHeatmap = await db.query(`
-      SELECT 
-        EXTRACT(DOW FROM start_time) as dow,
-        EXTRACT(HOUR FROM start_time) as hour,
-        COUNT(*) as count
-      FROM bookings
-      WHERE organization_id = $1 AND status != 'Cancelled'
-      GROUP BY dow, hour
-      ORDER BY dow, hour
-    `, [orgId]);
+    const bookingHeatmap = await db.query(queries.getBookingHeatmap, [orgId]);
 
     // Build heatmap structure
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -116,16 +56,7 @@ const getReportData = async (req, res) => {
     }
 
     // 9. Utilization trend (monthly - last 7 months)
-    const utilizationTrend = await db.query(`
-      SELECT 
-        TO_CHAR(date_trunc('month', al.allocated_date), 'Mon') as month,
-        COUNT(DISTINCT al.asset_id) as allocated
-      FROM asset_allocations al
-      WHERE al.organization_id = $1
-        AND al.allocated_date >= NOW() - INTERVAL '7 months'
-      GROUP BY date_trunc('month', al.allocated_date)
-      ORDER BY date_trunc('month', al.allocated_date)
-    `, [orgId]);
+    const utilizationTrend = await db.query(queries.getUtilizationTrend, [orgId]);
 
     const trendData = utilizationTrend.rows.map(r => ({
       month: r.month,
@@ -134,33 +65,10 @@ const getReportData = async (req, res) => {
     }));
 
     // 10. Watchlist - assets needing attention (under maintenance or nearing issues)
-    const watchlist = await db.query(`
-      SELECT 
-        a.asset_tag,
-        a.name,
-        s.name as status,
-        d.name as department
-      FROM assets a
-      JOIN asset_status s ON a.status_id = s.id
-      LEFT JOIN departments d ON a.current_department_id = d.id
-      WHERE a.organization_id = $1
-        AND a.deleted_at IS NULL
-        AND s.name IN ('Under Maintenance', 'Disposed', 'Lost')
-      ORDER BY a.updated_at DESC
-      LIMIT 10
-    `, [orgId]);
+    const watchlist = await db.query(queries.getWatchlist, [orgId]);
 
     // 11. Full asset list for CSV export
-    const allAssets = await db.query(`
-      SELECT 
-        a.asset_tag, a.name, s.name as status,
-        d.name as department
-      FROM assets a
-      JOIN asset_status s ON a.status_id = s.id
-      LEFT JOIN departments d ON a.current_department_id = d.id
-      WHERE a.organization_id = $1 AND a.deleted_at IS NULL
-      ORDER BY a.asset_tag
-    `, [orgId]);
+    const allAssets = await db.query(queries.getAllAssets, [orgId]);
 
     res.status(200).json({
       success: true,

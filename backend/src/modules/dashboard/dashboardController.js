@@ -153,18 +153,17 @@ const getNotifications = async (req, res) => {
 
     const logs = activitiesRes.rows.map((row, index) => ({
       id: `activity-${index}-${row.created_at}`,
-      type: row.module?.toLowerCase() || 'activity',
+      type: row.module,
       action: row.action,
-      actor: row.user_name || 'System',
+      actor: row.user_name,
       time: row.created_at,
-      module: row.module || 'General',
-      detail: ''
+      module: row.module,
     }));
 
     notifications.sort((a, b) => new Date(b.time) - new Date(a.time));
     logs.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    const readsRes = await db.query('SELECT notification_id FROM user_notification_reads WHERE user_id = $1', [userId]);
+    const readsRes = await db.query(queries.getUserNotificationReads, [userId]);
     const readIds = readsRes.rows.map(r => r.notification_id);
 
     res.status(200).json({ success: true, data: { notifications, logs, readIds } });

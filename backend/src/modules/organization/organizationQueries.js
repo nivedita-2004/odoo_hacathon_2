@@ -69,6 +69,9 @@ module.exports = {
   clearRolePermissions: `DELETE FROM role_permissions WHERE role_id = $1;`,
   addRolePermission: `INSERT INTO role_permissions (role_id, permission_id) VALUES ($1, $2);`,
   createPermission: `INSERT INTO permissions (name, description) VALUES ($1, $2) RETURNING *;`,
+  checkPermissionExists: `SELECT id FROM permissions WHERE name = $1;`,
+  updatePermission: `UPDATE permissions SET description = $2 WHERE name = $1 RETURNING *;`,
+  createPendingUser: `INSERT INTO users (organization_id, employee_id, email, password_hash, status) VALUES ($1, $2, $3, $4, 'PENDING_VERIFICATION');`,
 
   // Branding
   getBranding: `SELECT logo_url, brand_color FROM organizations WHERE id = $1;`,
