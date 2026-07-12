@@ -75,7 +75,7 @@ const createAsset = async (req, res) => {
     let qrCodeUrl = '';
     if (process.env.CLOUDINARY_API_KEY) {
       const uploadResult = await cloudinary.uploader.upload(qrDataUrl, { folder: 'assetflow/qrcodes' });
-      qrCodeUrl = uploadResult.secure_url;
+        qrCodeUrl = uploadResult.secure_url;
     } else {
       // Fallback if Cloudinary is not configured yet
       qrCodeUrl = qrDataUrl; 

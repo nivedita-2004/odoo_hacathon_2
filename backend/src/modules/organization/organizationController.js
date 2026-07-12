@@ -129,6 +129,9 @@ const saveEmployee = async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error(error);
+    if (error.code === '23505') {
+      return res.status(400).json({ success: false, error: 'An employee with this email already exists in this organization.' });
+    }
     res.status(500).json({ success: false, error: 'Server Error' });
   } finally {
     client.release();
